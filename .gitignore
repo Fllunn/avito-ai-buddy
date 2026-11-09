@@ -1,0 +1,47 @@
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+
+# --- Go ---
+/backend/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+coverage.html
+go.work
+go.work.sum
+
+# --- Node / frontend ---
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- IDE / OS ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Local agent settings (personal, not shared) ---
+.claude/settings.local.json
+CLAUDE.local.md
+
+# --- Misc ---
+*.log
+tmp/
