@@ -1,0 +1,22 @@
+digraph Components {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.2, nodesep=0.35, ranksep=0.38, fontname="Arial", label="Где проходят данные и проверки", labelloc=t, fontsize=20, fontcolor="#17243d"];
+  node [shape=box, style="rounded,filled", color="#b7c9e5", penwidth=1.2, fontname="Arial", fontsize=12.5, fontcolor="#17243d", margin="0.18,0.11"];
+  edge [color="#7188ad", arrowsize=0.7, penwidth=1.4, fontname="Arial", fontsize=10.5];
+  ui [fillcolor="#e9f4ff", label="1  Интерфейс\nЧат · план · карточка подтверждения"];
+  api [fillcolor="#edf2ff", label="2  Go API\nЛичность · права · проверка параметров"];
+  context [fillcolor="#edf2ff", label="3А  Разрешённый контекст\nПлан · документы · ссылки"];
+  agent [fillcolor="#f1ecff", label="4А  Тот же агент использует LLM\nОтвет с источником"];
+  tool [fillcolor="#fff1df", label="3Б  Тот же агент готовит действие\nПодтверждение · проверка · запись попытки"];
+  mock [fillcolor="#e8f7f4", label="4Б  Инструмент → имитация\nОтвет: номер · состояние или отказ"];
+  storage [fillcolor="#e8f7f4", label="5  Хранилище\nПопытка до вызова · ответ сервиса · состояние шага"];
+  shown [fillcolor="#e9f4ff", label="6  Интерфейс показывает результат\nили «результат уточняется»"];
+  ui -> api;
+  api -> context [label="только ответ"];
+  api -> tool [label="изменить состояние"];
+  context -> agent;
+  tool -> mock;
+  {rank=same; context; tool;}
+  {rank=same; agent; mock;}
+  agent -> shown;
+  mock -> storage -> shown;
+}

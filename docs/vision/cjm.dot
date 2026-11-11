@@ -1,0 +1,18 @@
+digraph CJM {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.2, nodesep=0.28, ranksep=0.36, fontname="Arial", label="Первые недели: три проверяемых пути", labelloc=t, fontsize=20, fontcolor="#17243d"];
+  node [shape=box, style="rounded,filled", color="#cbd8ec", penwidth=1.2, fontname="Arial", fontsize=13, fontcolor="#17243d", margin="0.17,0.11"];
+  edge [color="#829ac3", arrowsize=0.7, penwidth=1.4];
+  start [fillcolor="#e9f4ff", label="Стажёр открывает личный план\nКоманда · роль · текущий этап"];
+  q1 [fillcolor="#edf2ff", label="1  «С чего начать?»\nПроверка доступных материалов"];
+  q2 [fillcolor="#e8f7f4", label="2  «Нужен доступ»\nРесурс · права · прежняя заявка"];
+  q3 [fillcolor="#fff1df", label="3  «Нужен отгул»\nДата · право · демоинструкция"];
+  r1 [fillcolor="#edf2ff", label="Шаг + ответственный\n+ ссылка на источник"];
+  r2 [fillcolor="#e8f7f4", label="Подтверждение → имитация\n→ номер и состояние заявки"];
+  r3 [fillcolor="#fff1df", label="Подтверждение → имитация\n→ номер и состояние запроса"];
+  end [fillcolor="#f1ecff", label="План показывает подтверждённый статус\nи следующий доступный шаг"];
+  start -> {q1 q2 q3};
+  q1 -> r1; q2 -> r2; q3 -> r3;
+  {rank=same; q1; q2; q3;}
+  {rank=same; r1; r2; r3;}
+  r1 -> end; r2 -> end; r3 -> end;
+}

@@ -1,0 +1,19 @@
+digraph AgentFlow {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.18, nodesep=0.35, ranksep=0.33, fontname="Arial", label="Как агент проходит от реплики к результату", labelloc=t, fontsize=20, fontcolor="#17243d"];
+  node [shape=box, style="rounded,filled", color="#b7c9e5", penwidth=1.2, fontname="Arial", fontsize=13, fontcolor="#17243d", margin="0.17,0.11"];
+  edge [color="#7188ad", arrowsize=0.7, penwidth=1.4, fontname="Arial", fontsize=11];
+  ask [fillcolor="#e9f4ff", label="1  Стажёр задаёт вопрос в чате"];
+  gate [fillcolor="#edf2ff", label="2  Бэкенд проверяет личность, права\nи отбирает разрешённый контекст"];
+  decide [shape=diamond, fillcolor="#fff5df", label="3  Какой результат\nнужен?"];
+  answer [fillcolor="#e9f4ff", label="Ответ: агент сверяет план и источник\n→ объясняет шаг со ссылкой"];
+  draft [fillcolor="#fff1df", label="Действие: агент уточняет параметры\n→ показывает карточку"];
+  confirm [fillcolor="#fff1df", label="4  Стажёр подтверждает\nименно показанную карточку"];
+  check [fillcolor="#edf2ff", label="5  Бэкенд повторно проверяет\nправа, параметры и известный дубль"];
+  call [fillcolor="#e8f7f4", label="6  Инструмент вызывает имитацию\nИнтерфейс показывает ожидание"];
+  result [fillcolor="#e8f7f4", label="7  Сверить ответ → сохранить → показать\nномер, состояние и следующий шаг"];
+  ask -> gate -> decide;
+  decide -> answer [label="только ответ"];
+  decide -> draft [label="изменить состояние"];
+  draft -> confirm -> check -> call -> result;
+  {rank=same; answer; draft;}
+}

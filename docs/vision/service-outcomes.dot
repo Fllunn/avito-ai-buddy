@@ -1,0 +1,12 @@
+digraph Outcomes {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.15, nodesep=0.28, ranksep=0.28, fontname="Arial", label="После вызова: что показывать стажёру", labelloc=t, fontsize=19, fontcolor="#17243d"];
+  node [shape=box, style="rounded,filled", color="#cbd8ec", penwidth=1.2, fontname="Arial", fontsize=13, fontcolor="#17243d", margin="0.18,0.14", width=3.1];
+  good [fillcolor="#e8f7f4", label="1  УСПЕХ ПОДТВЕРЖДЁН\nНомер + состояние + время\nЗавершить сервисный шаг"];
+  reject [fillcolor="#fff1df", label="2  СЕРВИС ОТКАЗАЛ\nРазрешённая причина\nШаг не завершён"];
+  timeout [fillcolor="#fbecef", label="3  ТАЙМАУТ\nРезультат уточняется\nСверить попытку; повтор закрыт"];
+  save [fillcolor="#fbecef", label="4  СБОЙ СОХРАНЕНИЯ\nРезультат уточняется\nВосстановить по идентификатору"];
+  {rank=same; good; reject;}
+  {rank=same; timeout; save;}
+  good -> timeout [style=invis];
+  reject -> save [style=invis];
+}
