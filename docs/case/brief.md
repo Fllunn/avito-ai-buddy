@@ -71,13 +71,13 @@
 ## Источники информации
 | Источник | Ссылка |
 |---|---|
-| Чек-лист стажёра Авито (шаги адаптации, материалы для Backend-стажёров) | https://docs.google.com/spreadsheets/d/1qKFq0zfSZ2jEz57j85mq7ruldXiJ3RfWohgemVlceV0/edit?usp=sharing |
+| Чек-лист стажёра Авито (шаги адаптации, материалы для Backend-стажёров) | https://docs.google.com/spreadsheets/d/1qKFqOzfSZ2jEz57jBSmq7rukDXi_tRfWohgemViceV0/edit?gid=1073060303#gid=1073060303 |
 | AvitoTech Playbook | https://github.com/avito-tech/playbook |
 | Блог AvitoTech на Хабре | https://habr.com/ru/companies/avito/articles/ |
 | AvitoTech | https://avito.tech/ |
 | AvitoTech Internship | https://github.com/avito-tech/tech-internship |
 | Дизайн-система Авито (статья) | https://habr.com/ru/companies/avito/articles/543450/ |
 | Материалы Авито о стажировках | https://start.avito.ru/internships |
-| Видео-доклад о дизайн-системе | https://rutube.ru/video/8a203a00a9ef7cdd25d8f1a0fcacd6fb/ |
+| Видео-доклад о дизайн-системе | https://rutube.ru/video/6a203a00a9ef7cdd25d811a01cacd61b/ |
 
-> ⚠️ Ссылки переписаны с PDF вручную — сверьте с оригиналом, особенно ссылку на чек-лист.
+Ссылки сверены со слайдом «Источники информации» (2026-11-11). Конспекты всех источников — в [docs/sources/](../sources/README.md).
