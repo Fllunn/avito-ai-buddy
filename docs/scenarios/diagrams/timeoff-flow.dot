@@ -1,0 +1,33 @@
+digraph TimeOff {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.2, nodesep=0.45, ranksep=0.32, fontname="Arial", label="Запрос на отгул: от фразы до карточки", labelloc=t, fontsize=20, fontcolor="#17243d"];
+  node [shape=box, style="rounded,filled", color="#b7c9e5", penwidth=1.2, fontname="Arial", fontsize=12.5, fontcolor="#17243d", margin="0.14,0.09", width=2.9];
+  edge [color="#7188ad", arrowsize=0.8, penwidth=1.3, fontname="Arial", fontsize=10.5, fontcolor="#40506e"];
+
+  in      [group=main, fillcolor="#e9f4ff", label="«Мне нужен отгул в пятницу»\n«Как оформить отгул?»"];
+  kind    [group=main, shape=diamond, fillcolor="#fff5df", label="Что это?", width=1.8];
+  dates   [group=main, shape=diamond, fillcolor="#fff5df", label="Даты\nизвестны?", width=1.8];
+  rules   [group=main, fillcolor="#edf2ff", label="Правила R1–R7 кодом\nне прошлое · за 1 раб. день · рабочие дни\n≤ 5 раб. дней · ≤ 90 дней · нет пересечений", width=3.6];
+  card    [group=main, fillcolor="#e8f7f4", label="Карточка: отгул · даты с днём недели\nчисло раб. дней · согласует руководитель\nпричина не нужна", width=3.6];
+
+  other   [fillcolor="#fbecef", label="Отпуск · больничный · полдня\n→ не оформляю, вот к кому"];
+  info    [fillcolor="#edf2ff", label="Демо-инструкция\n+ «Оформить сейчас?»"];
+  askd    [fillcolor="#fff1df", label="Кнопки: ближайшие рабочие дни\n· другая дата · несколько дней\n«не знаю» → вернёмся позже"];
+  fix     [fillcolor="#fbecef", label="Нарушения: все причины сразу\n+ варианты дат → снова даты"];
+  overlap [fillcolor="#f1ecff", label="Пересечение: показать запрос\n[Перенести] [Другая дата]"];
+
+  in:s -> kind:n;
+  kind:s -> dates:n [label="  отгул"];
+  dates:s -> rules:n [label="  да — повторить явно"];
+  rules:s -> card:n [label="  всё в порядке"];
+
+  other -> kind [dir=back, label="не отгул"];
+  kind -> info [label="вопрос"];
+  info -> dates [style=dashed, label="оформить"];
+  askd -> dates [dir=both, style=dashed, label="нет"];
+  fix -> rules [dir=back, label="нарушение"];
+  rules -> overlap [label="пересечение"];
+
+  {rank=same; other; kind; info;}
+  {rank=same; askd; dates;}
+  {rank=same; fix; rules; overlap;}
+}

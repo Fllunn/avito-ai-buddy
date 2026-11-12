@@ -1,0 +1,35 @@
+digraph DialogFlow {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.2, nodesep=0.45, ranksep=0.32, fontname="Arial", label="Как агент ведёт любой запрос", labelloc=t, fontsize=20, fontcolor="#17243d"];
+  node [shape=box, style="rounded,filled", color="#b7c9e5", penwidth=1.2, fontname="Arial", fontsize=13, fontcolor="#17243d", margin="0.17,0.11", width=3.4];
+  edge [color="#7188ad", arrowsize=0.8, penwidth=1.4, fontname="Arial", fontsize=11, fontcolor="#40506e"];
+
+  msg     [group=main, fillcolor="#e9f4ff", label="1  Реплика или кнопка стажёра"];
+  gate    [group=main, fillcolor="#edf2ff", label="2  Бэкенд: личность, права,\nразрешённый контекст"];
+  intent  [group=main, shape=diamond, fillcolor="#fff5df", label="3  Что нужно?", width=2.2];
+  answer  [fillcolor="#e9f4ff", label="Ответ: шаг плана или материал\nсо ссылкой; статус не меняется", width=2.9];
+  out     [fillcolor="#fbecef", label="Вне рамок или нет прав:\nотказ + к кому идти", width=2.9];
+  slots   [group=main, fillcolor="#fff1df", label="4  Уточнения: один вопрос за раз,\nкнопки + свободный текст"];
+  checks  [group=main, fillcolor="#edf2ff", label="5  Проверки кодом: права · дубли · правила\nнарушение → все причины и снова п. 4"];
+  card    [group=main, fillcolor="#fff1df", label="6  Карточка vN\nправка → новая версия"];
+  stop    [fillcolor="#f4f6fa", label="Отмена или 24 ч без ответа:\nничего не отправлено", width=2.9];
+  keep    [style=invis, width=2.9];
+  confirm [group=main, fillcolor="#fff1df", label="7  Подтверждение именно этой версии\n→ повторная проверка"];
+  call    [group=main, fillcolor="#e8f7f4", label="8  Попытка записана → вызов имитации\nинтерфейс показывает ожидание"];
+  result  [group=main, fillcolor="#e8f7f4", label="9  Ответ сервиса сохранён\n→ чат и план"];
+
+  msg:s -> gate:n;
+  gate:s -> intent:n;
+  answer -> intent [dir=back, label="вопрос"];
+  intent -> out [label="вне рамок"];
+  intent:s -> slots:n [label="  действие"];
+  slots:s -> checks:n;
+  checks:s -> card:n;
+  card -> stop [style=dashed, label="отмена"];
+  keep -> card [style=invis];
+  card:s -> confirm:n;
+  confirm:s -> call:n;
+  call:s -> result:n;
+
+  {rank=same; answer; intent; out;}
+  {rank=same; keep; card; stop;}
+}

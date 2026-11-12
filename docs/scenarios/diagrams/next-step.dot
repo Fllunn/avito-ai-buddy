@@ -1,0 +1,26 @@
+digraph NextStep {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.2, nodesep=0.22, ranksep=0.4, fontname="Arial", label="«С чего начать?»: шаг выбирает код, LLM только объясняет", labelloc=t, fontsize=19, fontcolor="#17243d"];
+  node [shape=box, style="rounded,filled", color="#b7c9e5", penwidth=1.2, fontname="Arial", fontsize=12.5, fontcolor="#17243d", margin="0.12,0.1"];
+  edge [color="#7188ad", arrowsize=0.8, penwidth=1.3, fontname="Arial", fontsize=11, fontcolor="#40506e"];
+
+  cand [fillcolor="#e9f4ff", label="Кандидаты: владелец — стажёр, шаг не выполнен и не заблокирован", width=5.6];
+
+  g1 [fillcolor="#fbecef", label="1  Требует\nвнимания", width=1.45];
+  g2 [fillcolor="#fff1df", label="2  Просрочен", width=1.45];
+  g3 [fillcolor="#edf2ff", label="3  В работе\nсейчас", width=1.45];
+  g4 [fillcolor="#edf2ff", label="4  Не начат\nсейчас", width=1.45];
+  g5 [fillcolor="#f4f6fa", label="5  Следующий\nпериод", width=1.45];
+
+  tie  [fillcolor="#fff5df", label="Внутри группы — сначала шаг, от которого зависят другие (P6 → P7)", width=5.6];
+  out  [fillcolor="#e8f7f4", label="Главный шаг + 2 следующих\nпочему сейчас · источник · кнопка", width=3.2];
+  wait [fillcolor="#f1ecff", label="Отдельно «Ждём от других»:\nшаги наставника и руководителя", width=3.0];
+
+  cand:s -> g3:n [label="  порядок групп"];
+  g1 -> g2 -> g3 -> g4 -> g5;
+  g3:s -> tie:n;
+  tie:s -> out:n;
+  out -> wait [style=dashed, arrowhead=none];
+
+  {rank=same; g1; g2; g3; g4; g5;}
+  {rank=same; out; wait;}
+}

@@ -1,0 +1,40 @@
+digraph Access {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.2, nodesep=0.45, ranksep=0.3, fontname="Arial", label="Запрос доступа: проверки до карточки", labelloc=t, fontsize=20, fontcolor="#17243d"];
+  node [shape=box, style="rounded,filled", color="#b7c9e5", penwidth=1.2, fontname="Arial", fontsize=12.5, fontcolor="#17243d", margin="0.14,0.09", width=2.9];
+  edge [color="#7188ad", arrowsize=0.8, penwidth=1.3, fontname="Arial", fontsize=10.5, fontcolor="#40506e"];
+
+  in     [group=main, fillcolor="#e9f4ff", label="«Не могу открыть пространство»\n«Нужен доступ к PAY» · кнопка в плане"];
+  res    [group=main, shape=diamond, fillcolor="#fff5df", label="Ресурс\nопределён?", width=2.0];
+  can    [group=main, shape=diamond, fillcolor="#fff5df", label="Стажёру можно\nзапросить?", width=2.0];
+  have   [group=main, shape=diamond, fillcolor="#fff5df", label="Что уже\nесть?", width=2.0];
+  team   [group=main, shape=diamond, fillcolor="#fff5df", label="В списке\nкоманды?", width=2.0];
+  lvl    [group=main, fillcolor="#fff1df", label="Уровень — как у члена команды\nвопрос, если вариантов > 1"];
+  why    [group=main, fillcolor="#fff1df", label="Обоснование: черновик агента\nили вопрос «для чего?»"];
+  card   [group=main, fillcolor="#e8f7f4", label="Карточка: ресурс · уровень · согласующий\nобоснование · [Отправить] [Изменить] [Отмена]", width=3.6];
+
+  nf     [fillcolor="#fbecef", label="Скрыт или не найден:\n«не нашёл» — без намёка"];
+  deny   [fillcolor="#fbecef", label="«Нет права запрашивать»\n+ контакт наставника"];
+  exist  [fillcolor="#edf2ff", label="Доступ есть → новая не нужна\nОткрытая заявка → её статус\nСпорная попытка → сверка"];
+  ask    [fillcolor="#fff1df", label="Вопрос кнопками: ресурсы\nкоманды · другое · не знаю"];
+  mentor [fillcolor="#f1ecff", label="Совет свериться с наставником\n«по задаче» — ещё и вопрос о задаче\n[Оформить] [Сначала спрошу]"];
+
+  in:s -> res:n;
+  res:s -> can:n [label="  да"];
+  can:s -> have:n [label="  да"];
+  have:s -> team:n [label="  ничего или был отказ"];
+  team:s -> lvl:n [label="  да"];
+  lvl:s -> why:n;
+  why:s -> card:n;
+
+  nf -> res [dir=back, label="скрыт"];
+  res -> ask [dir=both, style=dashed, label="неясно"];
+  deny -> can [dir=back, label="нет"];
+  have -> exist [label="есть"];
+  team -> mentor [label="нет или\n«по задаче»"];
+  mentor -> lvl [style=dashed, label="оформить"];
+
+  {rank=same; nf; res; ask;}
+  {rank=same; deny; can;}
+  {rank=same; have; exist;}
+  {rank=same; team; mentor;}
+}

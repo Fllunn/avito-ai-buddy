@@ -1,0 +1,35 @@
+digraph Statuses {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.2, nodesep=0.3, ranksep=0.4, fontname="Arial", label="Статусы приходят только от имитации сервиса", labelloc=t, fontsize=19, fontcolor="#17243d", newrank=true];
+  node [shape=box, style="rounded,filled", color="#cbd8ec", penwidth=1.1, fontname="Arial", fontsize=12.5, fontcolor="#17243d", margin="0.12,0.08", width=2.0];
+  edge [color="#829ac3", arrowsize=0.8, penwidth=1.2, fontname="Arial", fontsize=10, fontcolor="#40506e"];
+
+  subgraph cluster_a {
+    label="Заявка на доступ"; fontsize=14; fontcolor="#17243d"; color="#d6e0f0"; style="rounded"; margin=14;
+    a1 [fillcolor="#edf2ff", label="Создана\nP6: ждём согласующего"];
+    a2 [fillcolor="#edf2ff", label="На рассмотрении"];
+    a5 [fillcolor="#f4f6fa", label="Отменена\nP6 не начат", width=1.6];
+    a3 [fillcolor="#e8f7f4", label="Одобрена = доступ выдан\nP6 выполнен, P7 открыт"];
+    a4 [fillcolor="#fff1df", label="Отклонена + причина\nP6 требует внимания"];
+    a1 -> a2;
+    a2 -> a3;
+    a2 -> a4;
+    a2 -> a5 [style=dashed, label="отмена"];
+  }
+
+  subgraph cluster_t {
+    label="Запрос на отгул"; fontsize=14; fontcolor="#17243d"; color="#d6e0f0"; style="rounded"; margin=14;
+    t1 [fillcolor="#edf2ff", label="Отправлен\n≠ согласован"];
+    t2 [fillcolor="#edf2ff", label="На рассмотрении"];
+    t5 [fillcolor="#f4f6fa", label="Отменён\n(до первого дня)", width=1.6];
+    t3 [fillcolor="#e8f7f4", label="Согласован"];
+    t4 [fillcolor="#fff1df", label="Отклонён + причина"];
+    t1 -> t2;
+    t2 -> t3;
+    t2 -> t4;
+    t2 -> t5 [style=dashed, label="отмена"];
+  }
+
+  {rank=same; a1; t1;}
+  {rank=same; a2; a5; t2; t5;}
+  {rank=same; a3; a4; t3; t4;}
+}
