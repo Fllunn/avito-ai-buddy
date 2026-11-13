@@ -1,0 +1,11 @@
+services:
+  postgres:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  api:
+    ports: !reset []
+  mocks:
+    ports: !reset []
+  frontend:
+    ports: !reset []

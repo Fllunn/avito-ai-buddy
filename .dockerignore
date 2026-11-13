@@ -1,0 +1,12 @@
+.git
+.agents
+.codex
+.venv
+.env
+.env.*
+**/node_modules
+**/dist
+**/bin
+**/coverage
+**/coverage.out
+**/*.test

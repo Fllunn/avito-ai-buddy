@@ -1,6 +1,6 @@
 # Архитектура
 
-> Каркас. Заполняется по мере принятия решений; значимые решения дублируются ADR в [adr/](adr/).
+> Целевая архитектура — в утверждённом [design.md](../openspec/changes/build-onboarding-prototype/design.md). Реализованы Go-каркас (конфигурация, Clock, liveness), React-стартовый экран по исходникам Figma и Compose с PostgreSQL/Redis. Добавлены PostgreSQL-миграции/повторяемый сид M-0 и серверные демо-сессии (вход, ротация, выход, /api/me). Остальные бизнес-компоненты ниже ещё не реализованы. Решения: [модульный API](adr/0005-modular-api.md), [очередь PostgreSQL](adr/0006-postgres-jobs.md), [клиентский опрос](adr/0007-client-polling.md), [очистка ввода](adr/0008-sensitive-input.md).
 
 ## Обзор
 _TODO: схема компонентов (frontend ↔ backend API ↔ агент ↔ LLM / инструменты ↔ имитации сервисов ↔ PostgreSQL/Redis)._

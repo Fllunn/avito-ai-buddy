@@ -1,0 +1,118 @@
+name: ai-buddy
+
+x-process-environment: &process-environment
+  HTTP_ADDR: :8080
+  DEMO_MODE: ${DEMO_MODE:-true}
+  DEMO_NOW: ${DEMO_NOW-2026-11-12T12:00:00+05:00}
+  DEMO_TIMEZONE: ${DEMO_TIMEZONE:-Asia/Yekaterinburg}
+  REDIS_ADDR: redis:6379
+  ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:5173}
+  MOCK_URL: http://mocks:8080
+  SERVICE_SECRET: ${SERVICE_SECRET:?Set SERVICE_SECRET in .env}
+  LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+  LLM_MODEL: ${LLM_MODEL:-}
+  CARD_TTL: ${CARD_TTL:-24h}
+  STEP_CONFIRMATION_TTL: ${STEP_CONFIRMATION_TTL:-5m}
+  SESSION_TTL: ${SESSION_TTL:-8h}
+  LLM_TIMEOUT: ${LLM_TIMEOUT:-20s}
+  SERVICE_TIMEOUT: ${SERVICE_TIMEOUT:-3s}
+  CLIENT_POLL_INTERVAL: ${CLIENT_POLL_INTERVAL:-1s}
+  RECONCILE_DELAYS: ${RECONCILE_DELAYS:-1s,3s,10s,30s,60s}
+
+x-process-health: &process-health
+  test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/healthz]
+  interval: 3s
+  timeout: 2s
+  retries: 20
+  start_period: 5s
+
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      API_DB_PASSWORD: ${API_DB_PASSWORD:?Set API_DB_PASSWORD in .env}
+      MOCKS_DB_PASSWORD: ${MOCKS_DB_PASSWORD:?Set MOCKS_DB_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/01-databases.sh:/docker-entrypoint-initdb.d/01-databases.sh:ro
+    ports:
+      - 127.0.0.1:15432:5432
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d postgres && psql -U postgres -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname = ''buddy_mocks''" | grep -q 1']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  redis:
+    image: redis:7.4.1-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes:
+      - redis_data:/data
+    ports:
+      - 127.0.0.1:16379:6379
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  mocks:
+    build:
+      context: .
+      dockerfile: Dockerfile.go
+      args:
+        MODULE: mocks
+    environment:
+      <<: *process-environment
+      DATABASE_URL: postgres://buddy_mocks:${MOCKS_DB_PASSWORD:?Set MOCKS_DB_PASSWORD in .env}@postgres:5432/buddy_mocks
+      DEMO_ADMIN_SECRET: ${DEMO_ADMIN_SECRET:?Set DEMO_ADMIN_SECRET in .env}
+      DEMO_PANEL_ORIGIN: ${DEMO_PANEL_ORIGIN:-http://localhost:8081}
+    ports:
+      - 127.0.0.1:8081:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *process-health
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.go
+      args:
+        MODULE: backend
+    environment:
+      <<: *process-environment
+      DATABASE_URL: postgres://buddy_api:${API_DB_PASSWORD:?Set API_DB_PASSWORD in .env}@postgres:5432/buddy_api
+    ports:
+      - 127.0.0.1:8080:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mocks:
+        condition: service_healthy
+    healthcheck: *process-health
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - 127.0.0.1:5173:80
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1/ui-healthz]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+volumes:
+  postgres_data:
+  redis_data:
