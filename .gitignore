@@ -5,6 +5,7 @@
 
 # --- Go ---
 /backend/bin/
+/mocks/bin/
 *.exe
 *.exe~
 *.dll

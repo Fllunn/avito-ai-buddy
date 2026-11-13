@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  --set=ON_ERROR_STOP=1 \
+  --set=api_password="$API_DB_PASSWORD" \
+  --set=mocks_password="$MOCKS_DB_PASSWORD" <<'SQL'
+CREATE ROLE buddy_api LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD :'api_password';
+CREATE ROLE buddy_mocks LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD :'mocks_password';
+CREATE DATABASE buddy_api OWNER buddy_api;
+CREATE DATABASE buddy_mocks OWNER buddy_mocks;
+REVOKE ALL ON DATABASE buddy_api FROM PUBLIC;
+REVOKE ALL ON DATABASE buddy_mocks FROM PUBLIC;
+SQL
