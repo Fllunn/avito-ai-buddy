@@ -10,3 +10,5 @@
 **/coverage
 **/coverage.out
 **/*.test
+!runtime/dist
+!runtime/dist/**

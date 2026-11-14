@@ -70,4 +70,41 @@ describe('Connected workspace', () => {
     await screen.findByText('Карточка изменилась в другой вкладке. Загрузи актуальную версию.'); expect(screen.getByLabelText('Сообщение AI-buddy')).not.toBeDisabled(); fireEvent.click(within(screen.getByRole('form',{name:'Форма отгула'})).getByRole('button',{name:'Закрыть'}));
     server.use(http.get('*/api/onboarding', () => HttpResponse.json({ steps: 'invalid' }))); fireEvent.focus(window); await screen.findByText('Сервер вернул некорректные данные. Обнови страницу.', {}, { timeout: 4000 });
   });
+  it('shows progress and completion only after the status job and plan refresh finish', async () => {
+    let finished = false;
+    server.use(http.get('*/api/jobs/:id', () => HttpResponse.json({id:'refresh',state:finished?'completed':'running'})));
+    await login(); fireEvent.click(screen.getAllByRole('button',{name:/Мой онбординг/})[0]!);
+    const dialog=screen.getByRole('dialog',{name:'Мой онбординг'}); fireEvent.click(within(dialog).getByRole('button',{name:'Проверить статусы'}));
+    expect(within(dialog).getByRole('button',{name:'Проверяем статусы…'})).toBeDisabled();
+    expect(within(dialog).getByText('Получаем актуальные статусы заявок…')).toBeVisible();
+    finished=true;
+    expect(await within(dialog).findByText('Проверка завершена. Показаны последние данные.',{}, {timeout:4000})).toBeVisible();
+    expect(within(dialog).getByRole('button',{name:'Проверить статусы'})).toBeEnabled();
+  });
+  it('keeps saved data and offers a retry when a status check fails', async () => {
+    await login(); fireEvent.click(screen.getAllByRole('button',{name:/Мой онбординг/})[0]!);
+    server.use(http.post('*/api/requests/refresh',()=>new HttpResponse(null,{status:503})));
+    const dialog=screen.getByRole('dialog',{name:'Мой онбординг'}); fireEvent.click(within(dialog).getByRole('button',{name:'Проверить статусы'}));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Не удалось проверить статусы');
+    expect(within(dialog).getByText('Завести конспект',{selector:'strong'})).toBeVisible();
+    expect(within(dialog).getByRole('button',{name:'Проверить статусы'})).toBeEnabled();
+  });
+  it('reports a failed refresh job without claiming success', async () => {
+    let fail=false;
+    server.use(http.get('*/api/jobs/:id',()=>HttpResponse.json({id:'refresh',state:fail?'failed':'running',...(fail?{error:'SERVICE_UNAVAILABLE'}:{})})));
+    await login(); fireEvent.click(screen.getAllByRole('button',{name:/Мой онбординг/})[0]!);
+    const dialog=screen.getByRole('dialog',{name:'Мой онбординг'}); fireEvent.click(within(dialog).getByRole('button',{name:'Проверить статусы'})); fail=true;
+    expect(await within(dialog).findByRole('alert',{}, {timeout:4000})).toHaveTextContent('Не удалось проверить статусы');
+    expect(within(dialog).queryByText('Проверка завершена. Показаны последние данные.')).toBeNull();
+  });
+  it('reports an error if the updated plan cannot be loaded', async () => {
+    let finish = false;
+    server.use(http.get('*/api/jobs/:id',()=>HttpResponse.json({id:'refresh',state:finish?'completed':'running'})));
+    await login(); fireEvent.click(screen.getAllByRole('button',{name:/Мой онбординг/})[0]!);
+    const dialog=screen.getByRole('dialog',{name:'Мой онбординг'});
+    server.use(http.get('*/api/onboarding',()=>new HttpResponse(null,{status:503})));
+    fireEvent.click(within(dialog).getByRole('button',{name:'Проверить статусы'})); finish=true;
+    expect(await within(dialog).findByRole('alert',{}, {timeout:4000})).toHaveTextContent('Не удалось проверить статусы');
+    expect(within(dialog).getByText('Завести конспект',{selector:'strong'})).toBeVisible();
+  });
 });

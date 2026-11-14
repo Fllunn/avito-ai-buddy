@@ -46,3 +46,4 @@ CLAUDE.local.md
 # --- Misc ---
 *.log
 tmp/
+/runtime/

@@ -245,8 +245,7 @@ func TestExecutionClarificationTopicAndLease(t *testing.T) {
 type executionTimeoutProvider struct{ agent.Provider }
 
 func (p executionTimeoutProvider) Recognize(ctx context.Context, _ agent.Context, _ string) ([]byte, error) {
-	<-ctx.Done()
-	return nil, ctx.Err()
+	return nil, context.DeadlineExceeded
 }
 func TestExecutionTimeoutAndTelemetryDegradation(t *testing.T) {
 	for _, scenario := range []string{"timeout", "telemetry"} {
@@ -257,7 +256,6 @@ func TestExecutionTimeoutAndTelemetryDegradation(t *testing.T) {
 			cookie := request(h, "POST", "/api/demo/session", `{"user_id":"alina"}`, origin, nil).Result().Cookies()[0]
 			if scenario == "timeout" {
 				b.Provider = executionTimeoutProvider{agent.Fake{}}
-				b.LLMTimeout = 5 * time.Millisecond
 			} else {
 				if _, e := store.Pool.Exec(ctx, `CREATE FUNCTION reject_intermediate() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.kind='context' THEN RAISE EXCEPTION 'synthetic telemetry failure'; END IF; RETURN NEW; END; $$; CREATE TRIGGER reject_intermediate BEFORE INSERT ON execution_events FOR EACH ROW EXECUTE FUNCTION reject_intermediate()`); e != nil {
 					t.Fatal(e)

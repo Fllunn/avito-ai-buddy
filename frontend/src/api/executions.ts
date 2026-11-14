@@ -11,7 +11,7 @@ export const executionPageSchema=z.object({snapshot:executionSchema,events:z.arr
 export const executionsSchema=z.object({items:z.array(executionSchema),next_cursor:z.string().optional()});
 export type Execution=z.infer<typeof executionSchema>;
 export type ExecutionPage=z.infer<typeof executionPageSchema>;
-export type ExecutionEntry={snapshot:Execution;events:ExecutionPage['events'];sequence:number;lastSuccess:number};
+export type ExecutionEntry={snapshot:Execution;events:ExecutionPage['events'];sequence:number;lastSuccess:number;replayNew?:boolean};
 export const isActive=(state:string)=>['queued','running','reconciling'].includes(state);
 export function mergePage(previous:ExecutionEntry|undefined,page:ExecutionPage,now:number):ExecutionEntry{
   if(previous && page.snapshot.revision<previous.snapshot.revision) return {...previous,lastSuccess:now};

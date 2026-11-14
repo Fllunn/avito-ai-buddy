@@ -124,6 +124,12 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items = agent.AuthorizedHistory(frame, items)
+	for i := range items {
+		if b.authorizePayload(r.Context(), p, items[i].Metadata) != nil {
+			items[i].Text = "Прежний ответ скрыт: актуальные права на его источники не подтверждены."
+			items[i].Metadata = nil
+		}
+	}
 	visibleCards := []actions.Card{}
 	for _, c := range cards {
 		if decorated, e := b.decorate(r.Context(), p, c); e == nil {
@@ -256,6 +262,14 @@ func (s *Server) ownedCard(w http.ResponseWriter, r *http.Request) (demo.Profile
 		return p, actions.Card{}, false
 	}
 	c, e := s.config.Business.Store.Card(r.Context(), p.ID, r.PathValue("id"), s.config.Clock.Now())
+	if e == nil {
+		raw, err := json.Marshal(c)
+		if err != nil {
+			e = err
+		} else {
+			e = s.config.Business.authorizePayload(r.Context(), p, raw)
+		}
+	}
 	if e != nil {
 		s.businessFailure(w, e)
 		return p, c, false
@@ -368,6 +382,10 @@ func (s *Server) getAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a, e := s.config.Business.Store.Attempt(r.Context(), p.ID, r.PathValue("id"))
+	if e == nil {
+		raw, _ := json.Marshal(a)
+		e = s.config.Business.authorizePayload(r.Context(), p, raw)
+	}
 	if e != nil {
 		s.businessFailure(w, e)
 		return
@@ -380,6 +398,9 @@ func (s *Server) getJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	j, e := s.config.Business.Store.Job(r.Context(), p.ID, r.PathValue("id"))
+	if e == nil {
+		e = s.config.Business.authorizePayload(r.Context(), p, j.Result)
+	}
 	if e != nil {
 		s.businessFailure(w, e)
 		return
@@ -503,6 +524,13 @@ func (b *Business) localFrame(ctx context.Context, user string) (agent.Context, 
 	return (agent.Builder{Source: b.Store, Directory: localDirectory{b.Store}}).Build(ctx, user)
 }
 func (b *Business) decorate(ctx context.Context, p demo.Profile, c actions.Card) (actions.Card, error) {
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return c, err
+	}
+	if err := b.authorizePayload(ctx, p, raw); err != nil {
+		return c, err
+	}
 	params, e := tools.Decode(c.Type, c.Parameters)
 	if e != nil {
 		return c, e

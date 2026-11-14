@@ -124,8 +124,11 @@ func (b *Business) process(ctx context.Context, work storage.MessageWork, state 
 			inferred = &copy
 		}
 	}
+	// Consent comes from the user's explicit input, never from model output.
 	if inferred != nil {
 		intents = []agent.Intent{*inferred}
+	} else if work.Message.Kind == "text" && explicitConfirmation(work.Message.Text) {
+		intents = []agent.Intent{{Name: "card_confirm", Confidence: 1}}
 	} else if work.Message.Kind == "button" {
 		raw, _ := json.Marshal(work.Message.Slots)
 		var slots agent.Slots
@@ -153,6 +156,11 @@ func (b *Business) process(ctx context.Context, work storage.MessageWork, state 
 			return "Уточни, что нужно сделать. Доступны план, поиск инструкции, доступ и отгул.", nil, ""
 		}
 		intents = recognized.Data.Intents
+	}
+	for _, intent := range intents {
+		if intent.Name == "card_confirm" && !(work.Message.Kind == "button" && work.Message.Intent == "card_confirm") && !explicitConfirmation(work.Message.Text) {
+			return "Ничего не отправлено и не изменено. Для подтверждения проверь параметры и нажми кнопку или явно ответь «да, отправляй».", nil, ""
+		}
 	}
 	if state.Stage == "outside_access" && inferred == nil && len(intents) == 1 && intents[0].Name != "access_request" {
 		state.Stage = "parameters"
@@ -740,6 +748,15 @@ func (b *Business) process(ctx context.Context, work storage.MessageWork, state 
 		texts = append(texts, "Активная карточка остаётся в истории. Подтвердить её можно отдельной кнопкой.")
 	}
 	return strings.Join(texts, "\n\n"), map[string]any{"items": results, "mode": provider.Mode()}, ""
+}
+
+func explicitConfirmation(text string) bool {
+	switch strings.ToLower(strings.TrimSpace(text)) {
+	case "да", "да, отправляй":
+		return true
+	default:
+		return false
+	}
 }
 func safeCode(e error) string {
 	messages := map[string]string{"NOT_FOUND": "ресурс не найден или недоступен", "NOT_ALLOWED": "действие недоступно", "BEFORE_START": "стажировка ещё не началась", "VALIDATION_ERROR": "проверь параметры формы", "VERSION_CONFLICT": "карточка изменилась, открой актуальную версию", "CONFLICTING_ATTEMPT": "исход предыдущей попытки ещё уточняется", "ALREADY_GRANTED": "доступ уже выдан", "DUPLICATE_OPEN_REQUEST": "уже есть открытая заявка", "OVERLAPPING_REQUEST": "на эти дни есть активный запрос", "LEVEL_NOT_ALLOWED": "выбранный уровень недоступен", "CANCELLATION_TOO_LATE": "первый день уже наступил, обратись к руководителю"}

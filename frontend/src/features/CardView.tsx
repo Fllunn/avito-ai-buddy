@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Fieldset } from '../components/Primitives';
+import { Fieldset, Status, statusTone } from '../components/Primitives';
 import { z } from 'zod';
 import { actorName, errorText, cardSchema, confirmedSchema, queuedSchema, request, statusLabel, type Card } from '../api/client';
 export function CardView({ card, changed, track }: { card: Card; changed: () => void; failed: (e: unknown) => void; track: (id: string) => void }) {
@@ -31,7 +31,7 @@ export function CardView({ card, changed, track }: { card: Card; changed: () => 
     {card.state === 'draft' && <div className="button-row"><button disabled={busy || editing} className="primary" onClick={() => void run(async () => { const a = await request(`/cards/${card.id}/confirm`, confirmedSchema, 'POST', { expected_version: card.version }); track(a.job_id); })}>{card.type.endsWith('cancel') ? 'Подтвердить отмену' : card.type === 'access_create' ? 'Отправить заявку' : 'Отправить запрос на отгул'}</button>
       {card.type.endsWith('create') && <button disabled={busy} onClick={() => setEditing(true)}>Изменить</button>}
       <button disabled={busy} onClick={() => void run(async () => { await request(`/cards/${card.id}/discard`, z.object({ card: cardSchema }), 'POST', { expected_version: card.version }); })}>Не отправлять</button></div>}
-    {attempt && <div role="status"><p>{statusLabel(attempt.state)} · проверено {new Date(attempt.as_of).toLocaleString('ru-RU')}</p>
+    {attempt && <div role="status"><p><Status tone={statusTone(attempt.state)}>{statusLabel(attempt.state)}</Status> · проверено {new Date(attempt.as_of).toLocaleString('ru-RU')}</p>
       {(attempt.state === 'unknown' || attempt.state === 'manual_review' || attempt.state === 'unavailable') && <><p>{attempt.state === 'unavailable' ? 'Можно повторить с прежним ключом или проверить и закрыть прежнюю попытку перед новой карточкой.' : 'Неизвестно, выполнилось ли действие. Повторная отправка заблокирована до сверки.'}</p><button disabled={busy} onClick={() => void run(async () => { const j = await request(`/attempts/${attempt.id}/reconcile`, queuedSchema, 'POST', {}); track(j.job_id); })}>Проверить исход</button></>}
       {(attempt.state === 'unavailable' || attempt.state === 'not_created') && <button disabled={busy} onClick={() => void run(async () => { const j = await request(`/attempts/${attempt.id}/retry`, confirmedSchema, 'POST', {}); track(j.job_id); })}>Отправить заново с этими параметрами</button>}
     </div>}

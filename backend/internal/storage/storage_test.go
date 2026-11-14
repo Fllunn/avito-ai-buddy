@@ -1,29 +1,54 @@
 package storage
 
 import (
+	"ai-buddy/backend/internal/actions"
 	"ai-buddy/backend/platform/clock"
 	"ai-buddy/backend/platform/demo"
 	"context"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	url := os.Getenv("TEST_API_DATABASE_URL")
-	if url == "" {
+	databaseURL := os.Getenv("TEST_API_DATABASE_URL")
+	if databaseURL == "" {
 		t.Skip("run make integration-test or make coverage for PostgreSQL checks")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	s, err := Open(ctx, url)
+	admin, err := Open(ctx, databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.OperationalClock = clock.Fixed{Instant: time.Date(2027, 1, 11, 7, 0, 0, 0, time.UTC)}
+	t.Cleanup(admin.Close)
+	schema := pgx.Identifier{"storage_" + strings.ReplaceAll(actions.ID(), "-", "")}.Sanitize()
+	if _, err := admin.Pool.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.Pool.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Error(err)
+		}
+	})
+	parsed, err := url.Parse(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := parsed.Query()
+	query.Set("search_path", schema)
+	parsed.RawQuery = query.Encode()
+	s, err := Open(ctx, parsed.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.OperationalClock = clock.Fixed{Instant: time.Date(2026, 11, 12, 7, 0, 0, 0, time.UTC)}
 	t.Cleanup(s.Close)
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatal(err)
@@ -247,4 +272,22 @@ func TestPolicyVersionTracksAuthoritativeChanges(t *testing.T) {
 	if err != nil || after.PolicyVersion <= before.PolicyVersion {
 		t.Fatal("catalogue policy did not invalidate identity scope", after, err)
 	}
+}
+
+func TestFixtureSchemaAndClockIsolation(t *testing.T) {
+	first := testStore(t)
+	second := testStore(t)
+	ctx := context.Background()
+	now := first.OperationalClock.Now()
+	if _, err := first.CreateCard(ctx, "alina", "access_create", []byte(`{"resource_id":"monitoring"}`), now, 24*time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	cards, err := second.Cards(ctx, "alina", now)
+	if err != nil || len(cards) != 0 {
+		t.Fatal("fixture retained foreign draft", cards, err)
+	}
+	// Replacing a draft and then creating a worker job must never move the
+	// operational journal backwards, including within a single fixture.
+	jobFixture(t, first)
+	jobFixture(t, second)
 }

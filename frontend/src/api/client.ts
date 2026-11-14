@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { apiBaseURL } from './urls';
 
 const id = z.string().min(1);
 const instant = z.iso.datetime({ offset: true });
@@ -41,7 +42,7 @@ export async function request<T>(path: string, schema: z.ZodType<T>, method = 'G
   const current = generation;
   const controller = new AbortController(); controllers.add(controller);
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api${path}`, { method, credentials: 'include', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const response = await fetch(`${apiBaseURL()}/api${path}`, { method, credentials: 'include', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     if (current !== generation) throw new ApiError('SESSION_CHANGED', 0);
     const raw: unknown = response.status === 204 ? undefined : await response.json();
     if (current !== generation) throw new ApiError('SESSION_CHANGED', 0);

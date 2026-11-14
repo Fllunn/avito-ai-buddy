@@ -6,6 +6,8 @@
 
 [Продуктовая презентация](output/pdf/ai-buddy-presentation.pdf) · [Видеодемонстрация](output/demo/ai-buddy-demo.mp4) · [Карта проверок](docs/verification/README.md)
 
+[Открыть демо по HTTPS](https://semenovm.ru/avito_buddy/) · [Управление серверным стендом](docs/deployment.md). На публичном стенде используется fake LLM.
+
 ## Запуск с нуля через Docker
 
 ### 1. Подготовить окружение

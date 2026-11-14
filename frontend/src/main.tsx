@@ -13,7 +13,7 @@ import './features/workspace.css';
 
 const rootRoute = createRootRoute({ component: Outlet });
 const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: App });
-const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute]) });
+const router = createRouter({ basepath: import.meta.env.BASE_URL, routeTree: rootRoute.addChildren([indexRoute]) });
 declare module '@tanstack/react-router' { interface Register { router: typeof router } }
 
 createRoot(document.getElementById('root')!).render(

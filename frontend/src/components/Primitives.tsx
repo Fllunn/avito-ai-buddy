@@ -12,7 +12,15 @@ export function Fieldset({ legend, hint, error, children }: { legend: string; hi
     {error && <p id={`${id}-error`} className="field-error" role="alert">{error}</p>}
   </fieldset>;
 }
-export function Status({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'success' | 'warning' | 'error' }) {
+export type StatusTone = 'neutral' | 'info' | 'success' | 'warning' | 'error';
+export function statusTone(state: string): StatusTone {
+  if (['done', 'approved', 'succeeded', 'completed'].includes(state)) return 'success';
+  if (['rejected', 'failed', 'unavailable', 'overdue'].includes(state)) return 'error';
+  if (['attention', 'blocked', 'waiting_user', 'unknown', 'manual_review', 'reconciling', 'partial', 'stale'].includes(state)) return 'warning';
+  if (['in_progress', 'waiting', 'created', 'submitted', 'in_review', 'queued', 'sending', 'running', 'waiting_service'].includes(state)) return 'info';
+  return 'neutral';
+}
+export function Status({ children, tone = 'neutral' }: { children: ReactNode; tone?: StatusTone }) {
   return <span className={`status status-${tone}`}>{children}</span>;
 }
 export function Panel({ title, children }: { title: string; children: ReactNode }) {

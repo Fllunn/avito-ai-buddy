@@ -1,0 +1,33 @@
+# Отдельный демо-стенд за внешним nginx; готовые Linux amd64 артефакты в runtime/.
+services:
+  postgres:
+    restart: unless-stopped
+    ports: !reset []
+  redis:
+    restart: unless-stopped
+    ports: !reset []
+  api:
+    restart: unless-stopped
+    ports: !reset []
+    build:
+      dockerfile: infra/Dockerfile.runtime
+      args:
+        MODULE: api
+    environment:
+      ALLOWED_ORIGIN: https://semenovm.ru
+      LLM_PROVIDER: fake
+      OPENROUTER_API_KEY: ""
+  mocks:
+    restart: unless-stopped
+    ports: !reset []
+    build:
+      dockerfile: infra/Dockerfile.runtime
+      args:
+        MODULE: mocks
+    environment:
+      DEMO_PANEL_ORIGIN: http://localhost:8081
+  frontend:
+    restart: unless-stopped
+    build:
+      dockerfile: infra/Dockerfile.frontend-runtime
+    ports: !override ["127.0.0.1:25173:80"]
