@@ -14,6 +14,19 @@ var ErrNotAllowed = errors.New("NOT_ALLOWED")
 var ErrBeforeStart = errors.New("BEFORE_START")
 var ErrDependency = errors.New("DEPENDENCY_NOT_DONE")
 
+// SameScope checks the identity snapshot used to authorize a response. Compare
+// values as well as the policy version so a profile edit cannot reuse old data.
+func SameScope(a, b demo.Profile) bool {
+	return a.Enabled && b.Enabled && a.ID == b.ID && a.Role == b.Role &&
+		a.PolicyVersion == b.PolicyVersion && a.StartDate == b.StartDate &&
+		sameID(a.TeamID, b.TeamID) && sameID(a.BuddyID, b.BuddyID) &&
+		sameID(a.ManagerID, b.ManagerID) && sameID(a.CuratorID, b.CuratorID)
+}
+
+func sameID(a, b *string) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
+}
+
 func ServiceAction(p demo.Profile, now time.Time, location *time.Location) error {
 	if !p.Enabled || p.Role != "intern" {
 		return ErrNotAllowed

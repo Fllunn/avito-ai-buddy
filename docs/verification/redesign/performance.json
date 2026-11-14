@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-14",
+  "timezone": "Asia/Yekaterinburg",
+  "stand": "isolated Docker Compose, fake LLM, 100 sequential HTTP requests after 5 warmups, 1440x1000 Chromium",
+  "measurements": {
+    "plan": {
+      "requests": 100,
+      "warmup": 5,
+      "p95_ms": 5.74,
+      "max_ms": 15.84
+    },
+    "history": {
+      "requests": 100,
+      "warmup": 5,
+      "p95_ms": 7.84,
+      "max_ms": 11.62
+    },
+    "card": {
+      "requests": 100,
+      "warmup": 5,
+      "p95_ms": 1.75,
+      "max_ms": 3.27
+    }
+  }
+}

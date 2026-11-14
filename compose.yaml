@@ -11,6 +11,7 @@ x-process-environment: &process-environment
   SERVICE_SECRET: ${SERVICE_SECRET:?Set SERVICE_SECRET in .env}
   LLM_PROVIDER: ${LLM_PROVIDER:-fake}
   LLM_MODEL: ${LLM_MODEL:-}
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
   CARD_TTL: ${CARD_TTL:-24h}
   STEP_CONFIRMATION_TTL: ${STEP_CONFIRMATION_TTL:-5m}
   SESSION_TTL: ${SESSION_TTL:-8h}
@@ -69,6 +70,9 @@ services:
     environment:
       <<: *process-environment
       DATABASE_URL: postgres://buddy_mocks:${MOCKS_DB_PASSWORD:?Set MOCKS_DB_PASSWORD in .env}@postgres:5432/buddy_mocks
+      LLM_PROVIDER: fake
+      LLM_MODEL: ""
+      OPENROUTER_API_KEY: ""
       DEMO_ADMIN_SECRET: ${DEMO_ADMIN_SECRET:?Set DEMO_ADMIN_SECRET in .env}
       DEMO_PANEL_ORIGIN: ${DEMO_PANEL_ORIGIN:-http://localhost:8081}
     ports:

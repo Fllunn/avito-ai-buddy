@@ -22,8 +22,15 @@ type Store struct {
 	OperationalClock clock.Clock
 }
 
-func Open(ctx context.Context, url string) (*Store, error) {
-	pool, err := pgxpool.New(ctx, url)
+func Open(ctx context.Context, url string, locations ...*time.Location) (*Store, error) {
+	settings, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, fmt.Errorf("database configuration rejected")
+	}
+	if len(locations) > 0 && locations[0] != nil {
+		settings.ConnConfig.RuntimeParams["timezone"] = locations[0].String()
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, settings)
 	if err != nil {
 		return nil, fmt.Errorf("database configuration rejected")
 	}

@@ -5,14 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/jackc/pgx/v5"
+	"strconv"
 	"time"
 )
 
-const cardColumns = `c.id::text,c.user_id,c.type,c.version,c.state,c.expires_at,c.updated_at,v.parameters`
+const cardColumns = `c.id::text,c.user_id,c.type,c.version,c.state,c.expires_at,c.updated_at,v.parameters,ARRAY(SELECT l.run_id::text FROM execution_links l WHERE l.kind='card' AND l.object_id=c.id::text AND l.user_id=c.user_id ORDER BY l.run_id)`
 
 func scanCard(row pgx.Row) (actions.Card, error) {
 	var c actions.Card
-	err := row.Scan(&c.ID, &c.UserID, &c.Type, &c.Version, &c.State, &c.ExpiresAt, &c.UpdatedAt, &c.Parameters)
+	err := row.Scan(&c.ID, &c.UserID, &c.Type, &c.Version, &c.State, &c.ExpiresAt, &c.UpdatedAt, &c.Parameters, &c.ExecutionIDs)
 	if err == pgx.ErrNoRows {
 		return c, actions.ErrMissing
 	}
@@ -22,6 +23,12 @@ func validCard(kind string, parameters json.RawMessage, ttl time.Duration) bool 
 	return (kind == "access_create" || kind == "access_cancel" || kind == "time_off_create" || kind == "time_off_cancel") && json.Valid(parameters) && len(parameters) <= 8192 && ttl > 0
 }
 func (s *Store) CreateCard(ctx context.Context, user, kind string, parameters json.RawMessage, now time.Time, ttl time.Duration) (actions.Card, error) {
+	return s.createCard(ctx, user, kind, parameters, now, ttl, 0)
+}
+func (s *Store) CreateCardForMessage(ctx context.Context, user, kind string, parameters json.RawMessage, now time.Time, ttl time.Duration, messageID int64) (actions.Card, error) {
+	return s.createCard(ctx, user, kind, parameters, now, ttl, messageID)
+}
+func (s *Store) createCard(ctx context.Context, user, kind string, parameters json.RawMessage, now time.Time, ttl time.Duration, messageID int64) (actions.Card, error) {
 	if !validCard(kind, parameters, ttl) {
 		return actions.Card{}, actions.ErrInvalid
 	}
@@ -34,15 +41,64 @@ func (s *Store) CreateCard(ctx context.Context, user, kind string, parameters js
 	if err := tx.QueryRow(ctx, `SELECT enabled FROM users WHERE id=$1 FOR UPDATE`, user).Scan(&enabled); err != nil || !enabled {
 		return actions.Card{}, actions.ErrMissing
 	}
+	if messageID > 0 {
+		existing, e := scanCard(tx.QueryRow(ctx, `SELECT `+cardColumns+` FROM cards c JOIN card_versions v ON v.card_id=c.id AND v.version=c.version WHERE c.user_id=$1 AND c.type=$2 AND c.origin_message_id=$3`, user, kind, messageID))
+		if e == nil {
+			return existing, tx.Commit(ctx)
+		}
+		if e != pgx.ErrNoRows && e != actions.ErrMissing {
+			return actions.Card{}, e
+		}
+	}
+	oldRows, e := tx.Query(ctx, `SELECT `+cardColumns+` FROM cards c JOIN card_versions v ON v.card_id=c.id AND v.version=c.version WHERE c.user_id=$1 AND c.type=$2 AND c.state='draft'`, user, kind)
+	if e != nil {
+		return actions.Card{}, e
+	}
+	oldDrafts := []actions.Card{}
+	for oldRows.Next() {
+		old, e := scanCard(oldRows)
+		if e != nil {
+			oldRows.Close()
+			return actions.Card{}, e
+		}
+		oldDrafts = append(oldDrafts, old)
+	}
+	e = oldRows.Err()
+	oldRows.Close()
+	if e != nil {
+		return actions.Card{}, e
+	}
 	if _, err = tx.Exec(ctx, `UPDATE cards SET state=CASE WHEN expires_at<=$3 THEN 'expired' ELSE 'replaced' END,updated_at=$3 WHERE user_id=$1 AND type=$2 AND state='draft'`, user, kind, now); err != nil {
 		return actions.Card{}, err
 	}
+	for _, old := range oldDrafts {
+		outcome := "replaced"
+		if !now.Before(old.ExpiresAt) {
+			outcome = "expired"
+		}
+		if err = s.cardExecutionFact(ctx, tx, old, outcome); err != nil {
+			return actions.Card{}, err
+		}
+	}
 	card := actions.Card{ID: actions.ID(), UserID: user, Type: kind, Version: 1, State: "draft", ExpiresAt: now.Add(ttl), UpdatedAt: now, Parameters: parameters}
-	if _, err = tx.Exec(ctx, `INSERT INTO cards(id,user_id,type,version,state,expires_at,updated_at) VALUES($1,$2,$3,1,'draft',$4,$5)`, card.ID, user, kind, card.ExpiresAt, now); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO cards(id,user_id,type,version,state,expires_at,updated_at,origin_message_id) VALUES($1,$2,$3,1,'draft',$4,$5,$6)`, card.ID, user, kind, card.ExpiresAt, now, optionalMessageID(messageID)); err != nil {
 		return actions.Card{}, err
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO card_versions(card_id,version,parameters,expires_at,created_at) VALUES($1,1,$2,$3,$4)`, card.ID, parameters, card.ExpiresAt, now); err != nil {
 		return actions.Card{}, err
+	}
+	if err = recordEvent(ctx, tx, user, "card:"+card.ID+":1:shown", "card_shown", kind, "shown", 0, now); err != nil {
+		return actions.Card{}, err
+	}
+	if err = s.executionForCard(ctx, tx, card, messageID); err != nil {
+		return actions.Card{}, err
+	}
+	routeID, routeErr := routeFor(ctx, tx, user, "card", card.ID)
+	if routeErr != nil {
+		return actions.Card{}, routeErr
+	}
+	if routeID != "" {
+		card.ExecutionIDs = []string{routeID}
 	}
 	return card, tx.Commit(ctx)
 }
@@ -115,5 +171,22 @@ func (s *Store) changeCard(ctx context.Context, user, id string, expected int, p
 	if err != nil {
 		return card, err
 	}
+	code, outcome := "card_edited", "edited"
+	if cancel {
+		code, outcome = "card_cancelled", "discarded"
+	}
+	if err = recordEvent(ctx, tx, user, "card:"+card.ID+":"+strconv.Itoa(card.Version)+":"+outcome, code, card.Type, outcome, 0, now); err != nil {
+		return actions.Card{}, err
+	}
+	if err = s.cardExecutionFact(ctx, tx, card, outcome); err != nil {
+		return actions.Card{}, err
+	}
 	return card, tx.Commit(ctx)
+}
+
+func optionalMessageID(id int64) any {
+	if id == 0 {
+		return nil
+	}
+	return id
 }

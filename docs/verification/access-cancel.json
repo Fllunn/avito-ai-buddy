@@ -1,0 +1,8 @@
+{
+  "date": "2026-11-14",
+  "mode": "fake",
+  "request_id": "ACC-1043",
+  "not_cancelled_before_confirmation": true,
+  "status": "cancelled",
+  "reload_preserved": true
+}

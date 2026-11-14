@@ -1,0 +1,59 @@
+{
+  "formula": "WCAG relative sRGB luminance",
+  "checks": [
+    {
+      "foreground": "text-primary",
+      "background": "surface-page",
+      "ratio": 13.42,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "text-secondary",
+      "background": "surface-card",
+      "ratio": 6.35,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "text-secondary",
+      "background": "surface-soft",
+      "ratio": 5.4,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "surface-card",
+      "background": "action-primary",
+      "ratio": 7.48,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "status-success",
+      "background": "surface-card",
+      "ratio": 7.17,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "status-warning",
+      "background": "surface-card",
+      "ratio": 7.09,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "status-error",
+      "background": "surface-card",
+      "ratio": 6.82,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "focus-ring",
+      "background": "surface-card",
+      "ratio": 7.48,
+      "minimum": 3
+    },
+    {
+      "foreground": "border-control",
+      "background": "surface-card",
+      "ratio": 4.03,
+      "minimum": 3
+    }
+  ]
+}

@@ -132,22 +132,34 @@ func (Fake) Recognize(ctx context.Context, _ Context, query string) ([]byte, err
 		return nil, err
 	}
 	q := strings.ToLower(strings.TrimSpace(query))
+	accessAt, absenceAt := strings.Index(q, "доступ"), strings.Index(q, "отгул")
+	if accessAt >= 0 && absenceAt >= 0 {
+		first, second := "access_request", "time_off_request"
+		split := absenceAt
+		if absenceAt < accessAt {
+			first, second = "time_off_request", "access_request"
+			split = accessAt
+		}
+		return json.Marshal(Intents{Intents: []Intent{{Name: first, Slots: Slots{Query: query[:split]}, Confidence: 1}, {Name: second, Slots: Slots{Query: query[split:]}, Confidence: 1}}, Ambiguities: []string{}})
+	}
 	name := "unclear"
 	confidence := 0.5
 	switch {
 	case strings.Contains(q, "командиров") || strings.Contains(q, "больнич") || strings.Contains(q, "напиши код"):
 		name = "out_of_scope"
-	case strings.Contains(q, "отгул") && strings.Contains(q, "как"):
+	case strings.Contains(q, "отгул") && (strings.Contains(q, "как") || strings.Contains(q, "инструкц") || strings.Contains(q, "правил")):
 		name = "time_off_info"
 	case strings.Contains(q, "отгул"):
 		name = "time_off_request"
+	case strings.Contains(q, "доступ") && (strings.Contains(q, "как") || strings.Contains(q, "инструкц")):
+		name = "find_doc"
 	case strings.Contains(q, "доступ") || strings.Contains(q, "не могу открыть") || strings.Contains(q, "нет прав"):
 		name = "access_request"
 	case strings.Contains(q, "отмени"):
 		name = "cancel"
 	case strings.Contains(q, "согласовали") || strings.Contains(q, "что с моей заявкой"):
 		name = "status"
-	case strings.Contains(q, "поменяй") || strings.Contains(q, "давай редактирование"):
+	case strings.Contains(q, "поменяй") || strings.Contains(q, "вместо") || strings.HasPrefix(q, "а нет") || strings.Contains(q, "лучше ") || strings.Contains(q, "давай редактирование"):
 		name = "card_edit"
 	case strings.Contains(q, "познакомилась") || strings.Contains(q, "познакомился"):
 		name = "mark_done"
@@ -155,7 +167,7 @@ func (Fake) Recognize(ctx context.Context, _ Context, query string) ([]byte, err
 		name = "next_step"
 	case strings.Contains(q, "инструкц") || strings.Contains(q, "spt") || strings.Contains(q, "пишут код"):
 		name = "find_doc"
-	case strings.Contains(q, "наставник") || strings.Contains(q, "кому писать") || strings.Contains(q, "цели"):
+	case strings.Contains(q, "наставник") || strings.Contains(q, "куратор") || strings.Contains(q, "программ") || strings.Contains(q, "чаты") || strings.Contains(q, "кому писать") || strings.Contains(q, "цели"):
 		name = "who_to_ask"
 	case q == "да" || q == "да, отправляй":
 		name = "card_confirm"
@@ -167,7 +179,19 @@ func (Fake) Recognize(ctx context.Context, _ Context, query string) ([]byte, err
 	if name != "unclear" {
 		confidence = 1
 	}
-	return json.Marshal(Intents{Intents: []Intent{{Name: name, Slots: Slots{Query: query}, Confidence: confidence}}, Ambiguities: []string{}})
+	slots := Slots{Query: query}
+	if name == "access_request" {
+		if strings.Contains(q, "админ") {
+			slots.Level = "admin"
+		} else if strings.Contains(q, "редактирован") {
+			slots.Level = "edit"
+		} else if strings.Contains(q, "запис") {
+			slots.Level = "write"
+		} else if strings.Contains(q, "чтени") {
+			slots.Level = "read"
+		}
+	}
+	return json.Marshal(Intents{Intents: []Intent{{Name: name, Slots: slots, Confidence: confidence}}, Ambiguities: []string{}})
 }
 func (Fake) SelectFragments(ctx context.Context, frame Context, _ string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {

@@ -38,8 +38,10 @@ func (s *Server) panelRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /demo/session", s.panelLogin)
 	mux.HandleFunc("DELETE /demo/session", s.panelLogout)
 	mux.HandleFunc("PATCH /demo/access-requests/{id}/status", s.panelStatus)
+	mux.HandleFunc("PATCH /demo/time-off-requests/{id}/status", s.panelTimeOffStatus)
 	mux.HandleFunc("PUT /demo/faults/{service}", s.panelFault)
 	mux.HandleFunc("POST /demo/panel/status", s.panelStatusForm)
+	mux.HandleFunc("POST /demo/panel/absence-status", s.panelStatusForm)
 	mux.HandleFunc("POST /demo/panel/fault", s.panelFaultForm)
 }
 func (s *Server) panelOrigin(w http.ResponseWriter, r *http.Request) bool {
@@ -231,7 +233,30 @@ func (s *Server) panel(w http.ResponseWriter, r *http.Request) {
 		failure(w, 503, "SERVICE_UNAVAILABLE")
 		return
 	}
-	_ = panelTemplate.Execute(w, struct{ Items []AccessRequest }{items})
+	rows.Close()
+	absences := []TimeOffRequest{}
+	absenceRows, err := s.Store.Pool.Query(r.Context(), `SELECT `+absenceColumns+` FROM time_off_requests ORDER BY created_at DESC,id DESC`)
+	if err != nil {
+		failure(w, 503, "SERVICE_UNAVAILABLE")
+		return
+	}
+	defer absenceRows.Close()
+	for absenceRows.Next() {
+		item, err := scanAbsence(absenceRows)
+		if err != nil {
+			failure(w, 503, "SERVICE_UNAVAILABLE")
+			return
+		}
+		absences = append(absences, item)
+	}
+	if absenceRows.Err() != nil {
+		failure(w, 503, "SERVICE_UNAVAILABLE")
+		return
+	}
+	_ = panelTemplate.Execute(w, struct {
+		Items    []AccessRequest
+		Absences []TimeOffRequest
+	}{items, absences})
 }
 func (s *Server) panelStatusForm(w http.ResponseWriter, r *http.Request) {
 	if !s.presenter(w, r) {
@@ -247,7 +272,12 @@ func (s *Server) panelStatusForm(w http.ResponseWriter, r *http.Request) {
 		failure(w, 400, "VALIDATION_ERROR")
 		return
 	}
-	result, err := s.AccessStatus(r.Context(), r.PostForm.Get("id"), version, r.PostForm.Get("status"), r.PostForm.Get("reason"))
+	var result operationResult
+	if r.URL.Path == "/demo/panel/absence-status" {
+		result, err = s.TimeOffStatus(r.Context(), r.PostForm.Get("id"), version, r.PostForm.Get("status"), r.PostForm.Get("reason"))
+	} else {
+		result, err = s.AccessStatus(r.Context(), r.PostForm.Get("id"), version, r.PostForm.Get("status"), r.PostForm.Get("reason"))
+	}
 	if err != nil {
 		failure(w, 500, "SERVICE_ERROR")
 		return
@@ -279,4 +309,4 @@ func (s *Server) panelFaultForm(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/demo", http.StatusSeeOther)
 }
 
-var panelTemplate = template.Must(template.New("panel").Parse(`<!doctype html><html lang="ru"><meta charset="utf-8"><title>Ведущий — AI-buddy</title><style>body{font:16px system-ui;max-width:1100px;margin:40px auto;padding:20px;background:#f5f7fb;color:#202333}article,form{padding:16px;background:white;border-radius:12px;margin:12px 0}input,select,button{padding:10px;margin:4px}button{cursor:pointer}small{color:#596579}</style><h1>Панель ведущего — демонстрация</h1><p>Все сотрудники, регламенты и сервисы синтетические. Панель не выполняет реальные корпоративные операции.</p>{{if .}}<h2>Заявки на доступ</h2>{{range .Items}}<article><strong>{{.ID}}</strong> · {{.UserID}} · {{.ResourceID}} · {{.Status}} · версия {{.Version}}{{if .Reason}}<p>{{.Reason}}</p>{{end}}<form method="post" action="/demo/panel/status"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="version" value="{{.Version}}"><select name="status"><option value="in_review">На рассмотрении</option><option value="approved">Одобрить и выдать доступ</option><option value="rejected">Отклонить</option><option value="cancelled">Отменить</option></select><input name="reason" maxlength="500" placeholder="Демонстрационная причина отказа"><button>Изменить статус</button></form></article>{{end}}<h2>Сбои сервиса</h2><form method="post" action="/demo/panel/fault"><select name="service"><option value="access">Доступ</option><option value="time_off">Отгулы</option></select><select name="mode"><option value="normal">Обычный режим</option><option value="unavailable_before">Недоступен до обработки</option><option value="delay_before">Задержка перед обработкой</option><option value="lose_response_after">Потерять ответ после обработки</option><option value="reconciliation_unavailable">Сверка недоступна</option></select><input name="delay_ms" type="number" min="0" max="10000" value="0" aria-label="Задержка, мс"><button>Установить режим</button></form><h2>Сброс</h2><p>Полный сброс будет доступен командой <code>make demo-reset CONFIRM=demo</code> после реализации задачи 7.6. Выборочный сброс имитаций при работающем worker запрещён.</p>{{else}}<form method="post" action="/demo/session"><label>Секрет ведущего <input type="password" name="secret" required autocomplete="off"></label><button>Войти ведущим</button></form><small>Секрет задаётся переменной DEMO_ADMIN_SECRET. Пользовательская сессия и SERVICE_SECRET не подходят.</small>{{end}}</html>`))
+var panelTemplate = template.Must(template.New("panel").Parse(`<!doctype html><html lang="ru"><meta charset="utf-8"><title>Ведущий — AI-buddy</title><style>body{font:16px system-ui;max-width:1100px;margin:40px auto;padding:20px;background:#f5f7fb;color:#202333}article,form{padding:16px;background:white;border-radius:12px;margin:12px 0}input,select,button{padding:10px;margin:4px}button{cursor:pointer}small{color:#596579}</style><h1>Панель ведущего — демонстрация</h1><p>Все сотрудники, регламенты и сервисы синтетические. Панель не выполняет реальные корпоративные операции.</p>{{if .}}<h2>Заявки на доступ</h2>{{range .Items}}<article><strong>{{.ID}}</strong> · {{.UserID}} · {{.ResourceID}} · {{.Status}} · версия {{.Version}}{{if .Reason}}<p>{{.Reason}}</p>{{end}}<form method="post" action="/demo/panel/status"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="version" value="{{.Version}}"><select name="status"><option value="in_review">На рассмотрении</option><option value="approved">Одобрить и выдать доступ</option><option value="rejected">Отклонить</option><option value="cancelled">Отменить</option></select><input name="reason" maxlength="500" placeholder="Демонстрационная причина отказа"><button>Изменить статус</button></form></article>{{end}}<h2>Запросы отгулов</h2>{{range .Absences}}<article><strong>{{.ID}}</strong> · {{.UserID}} · {{.StartDate}} - {{.EndDate}} · {{.Workdays}} раб. дн. · {{.Status}} · версия {{.Version}}{{if .Reason}}<p>{{.Reason}}</p>{{end}}<form method="post" action="/demo/panel/absence-status"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="version" value="{{.Version}}"><select name="status"><option value="in_review">На рассмотрении</option><option value="approved">Согласовать</option><option value="rejected">Отклонить</option><option value="cancelled">Отменить до начала</option></select><input name="reason" maxlength="500" placeholder="Демонстрационная причина отказа"><button>Изменить статус</button></form></article>{{end}}<h2>Сбои сервиса</h2><form method="post" action="/demo/panel/fault"><select name="service"><option value="access">Доступ</option><option value="time_off">Отгулы</option></select><select name="mode"><option value="normal">Обычный режим</option><option value="unavailable_before">Недоступен до обработки</option><option value="delay_before">Задержка перед обработкой</option><option value="lose_response_after">Потерять ответ после обработки</option><option value="reconciliation_unavailable">Сверка недоступна</option></select><input name="delay_ms" type="number" min="0" max="10000" value="0" aria-label="Задержка, мс"><button>Установить режим</button></form><h2>Сброс</h2><p>Полный сброс удалит историю, сессии, заявки и ключи обоих сервисов. Выполни локально <code>make demo-reset CONFIRM=demo</code>. При сбое процессы останутся остановленными до повторного успешного сброса. Выборочный сброс имитаций при работающем worker запрещён.</p>{{else}}<form method="post" action="/demo/session"><label>Секрет ведущего <input type="password" name="secret" required autocomplete="off"></label><button>Войти ведущим</button></form><small>Секрет задаётся переменной DEMO_ADMIN_SECRET. Пользовательская сессия и SERVICE_SECRET не подходят.</small>{{end}}</html>`))

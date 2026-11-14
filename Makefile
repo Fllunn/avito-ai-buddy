@@ -37,3 +37,15 @@ infra-check:
 .PHONY: integration-test
 integration-test:
 	./scripts/test-services.sh $(MAKE) test-backend test-mocks
+
+.PHONY: metrics
+metrics:
+	./scripts/report-metrics.sh
+
+.PHONY: demo-reset
+demo-reset:
+	./scripts/demo-reset.sh "$(CONFIRM)"
+
+.PHONY: demo-env
+demo-env:
+	./scripts/init-demo-env.sh

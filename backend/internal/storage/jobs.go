@@ -4,6 +4,7 @@ import (
 	"ai-buddy/backend/internal/actions"
 	"context"
 	"github.com/jackc/pgx/v5"
+	"strconv"
 	"time"
 )
 
@@ -61,6 +62,15 @@ func (s *Store) MarkSending(ctx context.Context, job actions.Work, now time.Time
 	if _, err = tx.Exec(ctx, `UPDATE attempts SET state='sending',may_have_sent=true,updated_at=$2 WHERE id=$1`, job.Attempt.ID, now); err != nil {
 		return err
 	}
+	if err = s.attemptExecutionFact(ctx, tx, job, "queue", "succeeded", "running", "", "claimed"); err != nil {
+		return err
+	}
+	if err = s.attemptExecutionFact(ctx, tx, job, "validation", "succeeded", "running", "", "validated"); err != nil {
+		return err
+	}
+	if err = s.attemptExecutionFact(ctx, tx, job, "service", "waiting_service", "running", "", "sending"); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 func (s *Store) Uncertain(ctx context.Context, job actions.Work, now, next time.Time) error {
@@ -76,6 +86,15 @@ func (s *Store) Uncertain(ctx context.Context, job actions.Work, now, next time.
 		return err
 	}
 	if _, err = tx.Exec(ctx, `UPDATE jobs SET state='queued',kind='reconcile',available_at=$2,lease_token=NULL,lease_until=NULL WHERE id=$1`, job.JobID, next); err != nil {
+		return err
+	}
+	if err = recordEvent(ctx, tx, job.Attempt.UserID, job.Attempt.ID+":unknown", "attempt_outcome", job.CardType, "unknown", s.OperationalClock.Now().Sub(job.Attempt.OperationalCreatedAt).Milliseconds(), now, job.Attempt.ID); err != nil {
+		return err
+	}
+	if err = s.attemptExecutionFact(ctx, tx, job, "service", "unknown", "reconciling", "unknown", "lost_response"); err != nil {
+		return err
+	}
+	if err = s.attemptExecutionFact(ctx, tx, job, "reconciliation", "unknown", "reconciling", "unknown", "unknown"); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -109,6 +128,12 @@ func (s *Store) ReconcileLater(ctx context.Context, job actions.Work, now, opera
 	if _, err = tx.Exec(ctx, `UPDATE jobs SET state=$2,kind='reconcile',available_at=COALESCE($3,available_at),lease_token=NULL,lease_until=NULL WHERE id=$1`, job.JobID, jobState, next); err != nil {
 		return err
 	}
+	if err = recordEvent(ctx, tx, job.Attempt.UserID, job.Attempt.ID+":reconciliation:"+strconv.Itoa(count), "reconciliation_result", job.CardType, state, 0, now, job.Attempt.ID); err != nil {
+		return err
+	}
+	if err = s.attemptExecutionFact(ctx, tx, job, "reconciliation", "unknown", map[string]string{"unknown": "reconciling", "manual_review": "manual_review"}[state], state, "reconciliation:"+strconv.Itoa(count)); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 func (s *Store) NotCreated(ctx context.Context, job actions.Work, now time.Time) error {
@@ -124,6 +149,12 @@ func (s *Store) NotCreated(ctx context.Context, job actions.Work, now time.Time)
 		return err
 	}
 	if _, err = tx.Exec(ctx, `UPDATE jobs SET state='done',lease_token=NULL,lease_until=NULL WHERE id=$1`, job.JobID); err != nil {
+		return err
+	}
+	if err = recordEvent(ctx, tx, job.Attempt.UserID, job.Attempt.ID+":not_created", "reconciliation_result", job.CardType, "not_created", 0, now, job.Attempt.ID); err != nil {
+		return err
+	}
+	if err = s.attemptExecutionFact(ctx, tx, job, "reconciliation", "succeeded", "failed", "not_created", "not_created"); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-14",
+  "project": "ai-buddy-acceptance-20261114",
+  "mode": "fake",
+  "checkpoints": [
+    "unknown from actual lost response and deterministic queued job before reset",
+    "partial failure stops all handlers",
+    "retry completes both database and cache reset",
+    "old attempts, jobs and operation keys absent after waiting",
+    "old cookie rejected"
+  ],
+  "late_operations": 0
+}

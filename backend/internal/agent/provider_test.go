@@ -13,9 +13,10 @@ import (
 )
 
 type source struct {
-	fail     string
-	profiles map[string]demo.Profile
-	reads    int
+	onRecheck func(*demo.Profile)
+	fail      string
+	profiles  map[string]demo.Profile
+	reads     int
 }
 
 func fixtureSource() *source {
@@ -37,7 +38,60 @@ func (s *source) Profile(_ context.Context, id string) (demo.Profile, error) {
 	if s.fail == "revoked" && s.reads > 1 {
 		p.PolicyVersion++
 	}
+	if s.onRecheck != nil && s.reads > 1 {
+		s.onRecheck(&p)
+	}
 	return p, nil
+}
+
+func TestContextScopeChangesNeverReachProvider(t *testing.T) {
+	for name, change := range map[string]func(*demo.Profile){
+		"identity":     func(p *demo.Profile) { p.ID = "maxim" },
+		"team":         func(p *demo.Profile) { team := "search"; p.TeamID = &team },
+		"manager":      func(p *demo.Profile) { p.ManagerID = nil },
+		"future start": func(p *demo.Profile) { p.StartDate = "2027-01-01" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := fixtureSource()
+			s.onRecheck = change
+			p := &provider{raw: []byte(valid)}
+			result := recognizer(s, p).Recognize(context.Background(), "alina", text("что дальше"))
+			if !result.Fallback || result.Code != "CONTEXT_UNAVAILABLE" || p.calls != 0 {
+				t.Fatal("changed scope reached provider", result, p.calls)
+			}
+		})
+	}
+}
+
+func TestClosedResourceContextContainsOnlyVisibleSummary(t *testing.T) {
+	s := fixtureSource()
+	p := &provider{raw: []byte(valid)}
+	result := recognizer(s, p).Recognize(context.Background(), "alina", text("security-incidents"))
+	if result.Fallback || p.calls != 1 {
+		t.Fatal(result)
+	}
+	found := false
+	for _, resource := range p.frame.Resources {
+		if resource.Kind != "closed" {
+			continue
+		}
+		found = true
+		if resource.ID != "security-incidents" || resource.ApproverID != "" || resource.DefaultLevel != "" || len(resource.Levels) != 0 || len(resource.Synonyms) != 0 || len(resource.RecommendedTeams) != 0 {
+			t.Fatal("closed details reached provider", resource)
+		}
+	}
+	if !found {
+		t.Fatal("visible denial lost")
+	}
+	denial := ContactFor(p.frame, "resource", "security-incidents")
+	if denial.Contact == nil || denial.Contact.ID != "igor" || !strings.Contains(denial.Text, "нельзя") {
+		t.Fatal("visible denial lacks permitted buddy contact", denial)
+	}
+	hidden, _ := json.Marshal(ContactFor(p.frame, "resource", "salary-reports"))
+	missing, _ := json.Marshal(ContactFor(p.frame, "resource", "unknown"))
+	if string(hidden) != string(missing) {
+		t.Fatal("hidden resource existence disclosed")
+	}
 }
 func (s *source) Steps(context.Context, string) ([]demo.Step, error) {
 	if s.fail == "steps" {

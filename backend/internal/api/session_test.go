@@ -16,6 +16,7 @@ import (
 )
 
 type fakeIdentities struct {
+	afterSteps func()
 	lookupFail bool
 	mu         sync.Mutex
 	profiles   map[string]demo.Profile
@@ -218,10 +219,65 @@ func TestDisabledDemoAndStorageFailure(t *testing.T) {
 }
 
 func (s *fakeIdentities) Steps(_ context.Context, _ string) ([]demo.Step, error) {
+	if s.afterSteps != nil {
+		s.afterSteps()
+	}
 	if s.fail {
 		return nil, errors.New("private database error")
 	}
 	return demo.Steps(), nil
+}
+
+func TestPlanRechecksIdentityBeforeDisclosure(t *testing.T) {
+	for _, change := range []string{"version", "team", "disabled", "session", "outage"} {
+		t.Run(change, func(t *testing.T) {
+			store := fakeStore()
+			h := testServer(store, true)
+			login := request(h, "POST", "/api/demo/session", `{"user_id":"alina"}`, "http://localhost:5173", nil)
+			cookie := login.Result().Cookies()[0]
+			store.afterSteps = func() {
+				p := store.profiles["alina"]
+				switch change {
+				case "version":
+					p.PolicyVersion++
+				case "team":
+					team := "search"
+					p.TeamID = &team
+				case "disabled":
+					p.Enabled = false
+				case "session":
+					delete(store.sessions, hash(cookie.Value))
+				case "outage":
+					store.lookupFail = true
+				}
+				store.profiles["alina"] = p
+			}
+			w := request(h, "GET", "/api/onboarding", "", "", cookie)
+			want := 403
+			if change == "disabled" || change == "session" {
+				want = 401
+			}
+			if change == "outage" {
+				want = 503
+			}
+			if w.Code != want || strings.Contains(w.Body.String(), "alina-P") || strings.Contains(w.Body.String(), "steps") {
+				t.Fatal("stale plan disclosed", w)
+			}
+		})
+	}
+}
+
+func TestFuturePlanIsReadOnlyForAllRolesProjection(t *testing.T) {
+	store := fakeStore()
+	p := store.profiles["alina"]
+	p.StartDate = "2026-11-13"
+	store.profiles[p.ID] = p
+	h := testServer(store, true)
+	login := request(h, "POST", "/api/demo/session", `{"user_id":"alina"}`, "http://localhost:5173", nil)
+	w := request(h, "GET", "/api/onboarding", "", "", login.Result().Cookies()[0])
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"read_only":true`) || !strings.Contains(w.Body.String(), "alina-P1") {
+		t.Fatal("future plan unavailable or writable", w)
+	}
 }
 func TestPlanProjectionCannotRequestOtherUser(t *testing.T) {
 	store := fakeStore()

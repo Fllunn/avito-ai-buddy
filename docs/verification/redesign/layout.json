@@ -1,0 +1,38 @@
+{
+  "results": [
+    {
+      "width": 1440,
+      "height": 900,
+      "overflow": false,
+      "draft_preserved": true,
+      "keyboard_dialog": true
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "overflow": false,
+      "draft_preserved": true,
+      "keyboard_dialog": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "overflow": false,
+      "draft_preserved": true,
+      "keyboard_dialog": true
+    },
+    {
+      "width": 320,
+      "height": 740,
+      "overflow": false,
+      "draft_preserved": true,
+      "keyboard_dialog": true
+    }
+  ],
+  "reduced_motion": true,
+  "text_200": true,
+  "page_errors": [],
+  "limitations": [
+    "Экранная клавиатура реального телефона и ручной скринридер не проверены."
+  ]
+}

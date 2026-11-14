@@ -1,0 +1,82 @@
+{
+  "date": "2026-11-14",
+  "timezone": "Asia/Yekaterinburg",
+  "mode": "fake",
+  "technical_stage": "complete",
+  "tasks": {
+    "total": 31,
+    "complete": 29,
+    "remaining": 2
+  },
+  "coverage": {
+    "modules": {
+      "backend": {
+        "covered": 3656,
+        "total": 4429
+      },
+      "frontend": {
+        "covered": 260,
+        "total": 271
+      },
+      "mocks": {
+        "covered": 734,
+        "total": 909
+      }
+    },
+    "total": {
+      "covered": 4650,
+      "total": 5609
+    }
+  },
+  "frontend": {
+    "test_files": 11,
+    "tests": 40,
+    "passed": true
+  },
+  "checks": {
+    "make_coverage": "passed; isolated PostgreSQL/Redis, race detector",
+    "make_build": "passed; backend, mocks, TypeScript/Vite",
+    "openspec_strict": "2 changes passed",
+    "chromium_layout": "passed; 320x740, 390x844, 1024x768, 1440x900, keyboard, reduced motion, 200% text",
+    "chromium_acceptance": "passed; orientation, access, time off, transfer and reload",
+    "chromium_resilience": "passed; delay, unavailable, lost response, reconciliation, ownership",
+    "restart": "passed; sessions, history, service versions and execution events",
+    "local_links": "78 checked, no missing targets",
+    "git_diff_check": "passed"
+  },
+  "performance": {
+    "plan": {
+      "requests": 100,
+      "warmup": 5,
+      "p95_ms": 5.74,
+      "max_ms": 15.84
+    },
+    "history": {
+      "requests": 100,
+      "warmup": 5,
+      "p95_ms": 7.84,
+      "max_ms": 11.62
+    },
+    "card": {
+      "requests": 100,
+      "warmup": 5,
+      "p95_ms": 1.75,
+      "max_ms": 3.27
+    }
+  },
+  "stand": {
+    "project": "ai-buddy-redesign-final-20261114",
+    "ui": "http://localhost:25173",
+    "provider": "fake"
+  },
+  "remaining": [
+    "7.2: manual screen reader check; automated keyboard and announcement checks passed",
+    "8.5: human acceptance"
+  ],
+  "limitations": [
+    "Actual phone keyboard and manual screen reader not tested",
+    "No live external LLM calls",
+    "Optional close-up screenshot not created: automatic approval review could not complete due to usage limit; existing screenshots are available",
+    "No commit, push, PR, merge, rebase or archive"
+  ]
+}

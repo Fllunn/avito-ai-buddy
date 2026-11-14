@@ -112,6 +112,15 @@ func (s *Store) ConfirmCard(ctx context.Context, user, id string, expected int, 
 	if _, err = tx.Exec(ctx, `UPDATE cards SET state='confirmed',updated_at=$2 WHERE id=$1`, id, now); err != nil {
 		return actions.Attempt{}, err
 	}
+	if err = recordEvent(ctx, tx, user, "attempt:"+attempt.ID+":started", "attempt_started", card.Type, "queued", 0, now); err != nil {
+		return actions.Attempt{}, err
+	}
+	if err = recordEvent(ctx, tx, user, "attempt:"+attempt.ID+":confirmed", "card_confirmed", card.Type, "confirmed", 0, now); err != nil {
+		return actions.Attempt{}, err
+	}
+	if err = s.confirmExecution(ctx, tx, card, attempt); err != nil {
+		return actions.Attempt{}, err
+	}
 	return attempt, tx.Commit(ctx)
 }
 func (s *Store) Attempt(ctx context.Context, user, id string) (actions.Attempt, error) {

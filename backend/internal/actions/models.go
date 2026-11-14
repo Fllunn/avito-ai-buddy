@@ -25,17 +25,30 @@ func ID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", value[:4], value[4:6], value[6:8], value[8:10], value[10:])
 }
 
+type CardSummary struct {
+	ResourceName string `json:"resource_name,omitempty"`
+	ApproverID   string `json:"approver_id,omitempty"`
+	Workdays     int    `json:"workdays,omitempty"`
+	StartLabel   string `json:"start_label,omitempty"`
+	EndLabel     string `json:"end_label,omitempty"`
+	Demo         bool   `json:"demo"`
+}
 type Card struct {
-	ID         string          `json:"id"`
-	UserID     string          `json:"user_id"`
-	Type       string          `json:"type"`
-	Version    int             `json:"version"`
-	State      string          `json:"state"`
-	ExpiresAt  time.Time       `json:"expires_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
-	Parameters json.RawMessage `json:"parameters"`
+	ExecutionIDs []string        `json:"execution_ids,omitempty"`
+	Summary      *CardSummary    `json:"summary,omitempty"`
+	Attempt      *Attempt        `json:"attempt,omitempty"`
+	ID           string          `json:"id"`
+	UserID       string          `json:"user_id"`
+	Type         string          `json:"type"`
+	Version      int             `json:"version"`
+	State        string          `json:"state"`
+	ExpiresAt    time.Time       `json:"expires_at"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+	Parameters   json.RawMessage `json:"parameters"`
 }
 type Message struct {
+	ExecutionIDs []string          `json:"execution_ids,omitempty"`
+	Metadata     json.RawMessage   `json:"metadata,omitempty"`
 	Slots        map[string]string `json:"slots"`
 	ID           int64             `json:"id"`
 	Sequence     int64             `json:"sequence"`

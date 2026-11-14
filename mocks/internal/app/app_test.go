@@ -39,7 +39,7 @@ func TestFactory(t *testing.T) {
 		path   string
 		status int
 		body   string
-	}{{"/healthz", 200, `"service":"mocks"`}, {"/readyz", 503, "BOOTSTRAP_ONLY"}, {"/v1/access-requests", 401, "UNAUTHENTICATED"}} {
+	}{{"/healthz", 200, `"service":"mocks"`}, {"/readyz", 200, `"status":"ready"`}, {"/v1/access-requests", 401, "UNAUTHENTICATED"}} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("GET", tc.path, nil))
 		if w.Code != tc.status || !strings.Contains(w.Body.String(), tc.body) {

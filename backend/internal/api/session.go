@@ -21,6 +21,8 @@ import (
 	"ai-buddy/backend/platform/health"
 )
 
+type actorContextKey struct{}
+
 const cookieName = "buddy_session"
 
 type IdentityStore interface {
@@ -30,6 +32,7 @@ type IdentityStore interface {
 	DeleteSession(context.Context, string) error
 }
 type Config struct {
+	Business   *Business
 	Demo       bool
 	Origin     string
 	Clock      clock.Clock
@@ -47,6 +50,9 @@ func New(identities IdentityStore, config Config) http.Handler {
 	mux.HandleFunc("POST /api/demo/session", s.login)
 	mux.HandleFunc("DELETE /api/session", s.logout)
 	mux.HandleFunc("GET /api/me", s.me)
+	if config.Business != nil {
+		s.businessRoutes(mux)
+	}
 	mux.HandleFunc("GET /api/onboarding", s.onboarding)
 	mux.Handle("/", health.Handler("api"))
 	return s.guard(mux)
@@ -78,7 +84,24 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			failure(w, 403, "ORIGIN_NOT_ALLOWED")
 			return
 		}
+		start := time.Now()
 		next.ServeHTTP(w, r)
+		if s.config.Business != nil {
+			if user, ok := r.Context().Value(actorContextKey{}).(string); ok {
+				scenario := ""
+				switch r.Pattern {
+				case "GET /api/onboarding":
+					scenario = "plan"
+				case "GET /api/chat":
+					scenario = "history"
+				case "GET /api/cards/{id}":
+					scenario = "card"
+				}
+				if scenario != "" {
+					s.config.Business.Store.RecordLocal(r.Context(), user, scenario, time.Since(start).Milliseconds())
+				}
+			}
+		}
 	})
 }
 func decode(w http.ResponseWriter, r *http.Request, target any) bool {
@@ -169,5 +192,6 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (demo.Prof
 		}
 		return demo.Profile{}, false
 	}
+	*r = *r.WithContext(context.WithValue(r.Context(), actorContextKey{}, p.ID))
 	return p, true
 }

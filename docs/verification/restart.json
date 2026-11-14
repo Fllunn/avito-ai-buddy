@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-14",
+  "mode": "fake",
+  "project": "ai-buddy-acceptance-20261114",
+  "preserved_objects": [
+    [
+      "ABS-2001",
+      "cancelled",
+      3
+    ],
+    [
+      "ABS-2002",
+      "submitted",
+      1
+    ],
+    [
+      "ACC-1042",
+      "approved",
+      2
+    ],
+    [
+      "ACC-1043",
+      "created",
+      1
+    ],
+    [
+      "ACC-1044",
+      "created",
+      1
+    ],
+    [
+      "ACC-1045",
+      "created",
+      1
+    ],
+    [
+      "ACC-1046",
+      "created",
+      1
+    ]
+  ],
+  "session_restored": true,
+  "history_preserved": true
+}

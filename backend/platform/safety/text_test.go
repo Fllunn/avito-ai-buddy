@@ -19,6 +19,8 @@ func (b broken) Clean(context.Context, string) (string, bool, error) {
 }
 func TestSensitiveCorpus(t *testing.T) {
 	corpus := []string{
+		"У меня температура, надо к врачу", "Отгул 13 ноября, запись в поликлинику", "Хочу отгул, симптомы не проходят",
+		"Забрать сына из школы", "Нужно помочь сыну", "Останусь с сыном", "Со мной сын",
 		"Хочу отгул 13 ноября, у меня грипп", "Отгул: диагноз диабет", "Нужен день, мама заболела", "Забрать ребёнка из школы", "У сына депрессия", "Семейные обстоятельства: развод", "Паспорт 1234 567890", "СНИЛС 123-456-789 00", "Номер банковской карты 4111 1111 1111 1111", "Я принимаю инсулин", "Супруга беременна", "\xff", strings.Repeat("я", 4001), "отгул\x00"}
 	for _, raw := range corpus {
 		value := Prepare(context.Background(), Local{}, raw)
@@ -32,7 +34,7 @@ func TestSensitiveCorpus(t *testing.T) {
 	}
 }
 func TestRedactionAndAllowedParameters(t *testing.T) {
-	for _, raw := range []string{"Доступ к PAY, token: ghp_123456789abc", "API_KEY=abc-secret123", "токен: abc123secret", "Bearer abc-secret", "sk-example123456789", "4111 1111 1111 1111"} {
+	for _, raw := range []string{"Доступ к PAY, token: ghp_123456789abc", "token=synthetic-opaque-value", "TOKEN: synthetic-value", "API_KEY=abc-secret123", "токен: abc123secret", "Bearer abc-secret", "sk-example123456789", "4111 1111 1111 1111"} {
 		safe := Prepare(context.Background(), Local{}, raw)
 		if !strings.Contains(safe.String(), Redacted) || safe.String() == raw {
 			t.Fatal("secret not removed")

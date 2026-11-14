@@ -104,7 +104,7 @@ func (s *Store) Finish(ctx context.Context, job actions.Work, result actions.Res
 		state = "unavailable"
 	}
 	if result.Object != nil {
-		if err := saveObject(ctx, tx, job, *result.Object, now); err != nil {
+		if err := saveObject(ctx, tx, job, *result.Object, now, s.OperationalClock.Now()); err != nil {
 			return err
 		}
 	}
@@ -115,15 +115,50 @@ func (s *Store) Finish(ctx context.Context, job actions.Work, result actions.Res
 	if _, err = tx.Exec(ctx, `UPDATE attempts SET state=$2,result_source=$3,result=$4,next_reconciliation_at=NULL,may_have_sent=CASE WHEN $2='unavailable' THEN false ELSE may_have_sent END,updated_at=$5 WHERE id=$1`, job.Attempt.ID, state, result.Source, payload, now); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `UPDATE jobs SET state='done',lease_token=NULL,lease_until=NULL WHERE id=$1`, job.JobID); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE jobs SET state='done',result=$2,lease_token=NULL,lease_until=NULL WHERE id=$1`, job.JobID, payload); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO events(event_id,user_id,attempt_id,code,scenario,outcome,duration_ms,created_at) VALUES($1,$2,$3,'action_result',$4,$5,$6,$7) ON CONFLICT DO NOTHING`, job.Attempt.ID+":"+state, job.Attempt.UserID, job.Attempt.ID, job.CardType, state, max(int64(0), s.OperationalClock.Now().Sub(job.Attempt.OperationalCreatedAt).Milliseconds()), now); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO events(event_id,user_id,attempt_id,code,scenario,outcome,duration_ms,created_at) VALUES($1,$2,$3,'attempt_outcome',$4,$5,$6,$7) ON CONFLICT DO NOTHING`, job.Attempt.ID+":"+state, job.Attempt.UserID, job.Attempt.ID, job.CardType, state, max(int64(0), s.OperationalClock.Now().Sub(job.Attempt.OperationalCreatedAt).Milliseconds()), now); err != nil {
+		return err
+	}
+	if result.Object != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO jobs(id,user_id,kind,state,available_at,created_at) VALUES($1,$2,'refresh','queued',$3,$3) ON CONFLICT DO NOTHING`, actions.ID(), job.Attempt.UserID, s.OperationalClock.Now()); err != nil {
+			return err
+		}
+	}
+	routeState, nodeState, resultCode := "completed", "succeeded", "created"
+	if job.CardType == "time_off_create" {
+		resultCode = "submitted"
+	}
+	if strings.HasSuffix(job.CardType, "cancel") {
+		resultCode = "cancelled"
+	}
+	if state == "rejected" {
+		routeState, nodeState, resultCode = "rejected", "rejected", "rejected"
+	}
+	if state == "unavailable" {
+		routeState, nodeState, resultCode = "failed", "failed", "unavailable"
+	}
+	node := "persistence"
+	if result.Source == "local_validation" {
+		node = "validation"
+	}
+	if job.Kind == "reconcile" || job.Attempt.MayHaveSent {
+		if err = s.attemptExecutionFact(ctx, tx, job, "reconciliation", "succeeded", "running", "", "reconciled"); err != nil {
+			return err
+		}
+	}
+	if result.Source == "service" {
+		if err = s.attemptExecutionFact(ctx, tx, job, "service", nodeState, "running", "", state+":response"); err != nil {
+			return err
+		}
+	}
+	if err = s.attemptExecutionFact(ctx, tx, job, node, nodeState, routeState, resultCode, state); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
-func saveObject(ctx context.Context, tx pgx.Tx, job actions.Work, object actions.Object, now time.Time) error {
+func saveObject(ctx context.Context, tx pgx.Tx, job actions.Work, object actions.Object, now, operationalNow time.Time) error {
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, object.Service+":"+object.ID); err != nil {
 		return err
 	}
@@ -150,7 +185,7 @@ func saveObject(ctx context.Context, tx pgx.Tx, job actions.Work, object actions
 	if err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO service_objects(service,object_id,user_id,service_version,payload,checked_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(service,object_id) DO UPDATE SET service_version=EXCLUDED.service_version,payload=EXCLUDED.payload,checked_at=EXCLUDED.checked_at`, object.Service, object.ID, object.UserID, object.Version, payload, now); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO service_objects(service,object_id,user_id,service_version,payload,checked_at,observed_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(service,object_id) DO UPDATE SET service_version=EXCLUDED.service_version,payload=EXCLUDED.payload,checked_at=EXCLUDED.checked_at,observed_at=EXCLUDED.observed_at`, object.Service, object.ID, object.UserID, object.Version, payload, now, operationalNow); err != nil {
 		return err
 	}
 	if object.Service == "access" {
@@ -166,7 +201,7 @@ func saveObject(ctx context.Context, tx pgx.Tx, job actions.Work, object actions
 	if _, err = tx.Exec(ctx, `INSERT INTO notifications(service,object_id,service_version,kind,message_id) VALUES($1,$2,$3,'status',$4) ON CONFLICT DO NOTHING`, object.Service, object.ID, object.Version, messageID); err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO events(event_id,user_id,attempt_id,code,scenario,outcome,duration_ms,created_at) VALUES($1,$2,$3,'service_status',$4,$5,0,$6) ON CONFLICT DO NOTHING`, object.Service+":"+object.ID+":"+strconv.FormatInt(object.Version, 10), object.UserID, optionalID(job.Attempt.ID), object.Service, object.Status, now)
+	_, err = tx.Exec(ctx, `INSERT INTO events(event_id,user_id,attempt_id,code,scenario,outcome,duration_ms,created_at) VALUES($1,$2,$3,'status_changed',$4,$5,0,$6) ON CONFLICT DO NOTHING`, object.Service+":"+object.ID+":"+strconv.FormatInt(object.Version, 10), object.UserID, optionalID(job.Attempt.ID), object.Service, object.Status, now)
 	return err
 }
 func statusLabel(status string) string {
@@ -201,7 +236,7 @@ func (s *Store) ApplyObject(ctx context.Context, user string, object actions.Obj
 		return err
 	}
 	defer tx.Rollback(context.WithoutCancel(ctx))
-	if err := saveObject(ctx, tx, actions.Work{Attempt: actions.Attempt{UserID: user}}, *result.Object, now); err != nil {
+	if err := saveObject(ctx, tx, actions.Work{Attempt: actions.Attempt{UserID: user}}, *result.Object, now, s.OperationalClock.Now()); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

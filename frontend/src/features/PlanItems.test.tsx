@@ -1,0 +1,13 @@
+import {render,screen,fireEvent} from '@testing-library/react';
+import {describe,it,expect,vi} from 'vitest';
+import {PlanStep,ServiceRequest} from './PlanItems';
+import {WorkspaceContext,periodProgress} from './WorkspaceOverview';
+import {type Plan,type ServiceObject} from '../api/client';
+const now='2026-11-14T00:00:00Z';
+const step:Plan['steps'][number]={id:'step',intern_id:'alina',code:'P6',title:'Настроить окружение',period:1,owner_id:'alina',closure:'manual',status:'not_started',dependencies:[],source:'Демонстрационный план',updated_at:now,version:1,blocked:false,overdue:false,own:true};
+const object:ServiceObject={id:'ACC-1',service:'access',user_id:'alina',resource_id:'monitoring',level:'read',approver_id:'olga',status:'approved',reason:null,version:1,created_at:now,updated_at:now};
+describe('full plan and requests',()=>{
+ it('keeps blocked and overdue steps explicit and does not offer a forbidden mark',()=>{const mark=vi.fn();const v=render(<PlanStep step={{...step,blocked:true,overdue:true}} readOnly={false} mark={mark}/>);expect(screen.getByText(/Сначала выполни зависимость · Просрочен/)).toBeVisible();expect(screen.queryByRole('button')).toBeNull();fireEvent.click(screen.getByText('Подробнее о шаге'));expect(screen.getByText(/Демонстрационный план/)).toBeVisible();v.rerender(<PlanStep step={step} readOnly mark={mark}/>);expect(screen.queryByRole('button')).toBeNull();v.rerender(<PlanStep step={{...step,status:'done'}} readOnly={false} mark={mark}/>);fireEvent.click(screen.getByText('Вернуть в работу'));expect(mark).toHaveBeenCalledOnce();});
+ it('never offers cancellation for an approved access and keeps absence outside the progress denominator',()=>{const cancel=vi.fn(),transfer=vi.fn();const v=render(<ServiceRequest object={object} cancel={cancel} transfer={transfer}/>);expect(screen.getByText('ACC-1 · Согласован')).toBeVisible();expect(screen.queryByRole('button')).toBeNull();const absence={...object,id:'ABS-1',service:'time_off' as const,start_date:'2026-11-20',end_date:'2026-11-20',workdays:1};v.rerender(<ServiceRequest object={absence} cancel={cancel} transfer={transfer}/>);fireEvent.click(screen.getByText('Перенести'));fireEvent.click(screen.getByText('Подготовить отмену'));expect(transfer).toHaveBeenCalledWith(absence);expect(cancel).toHaveBeenCalledWith(absence);const plan:Plan={steps:[step],next_steps:[step],waiting_on_others:[],requests:[absence],week:1,read_only:false,as_of:now};expect(periodProgress(plan)).toEqual({done:0,total:1});});
+ it('uses a neutral context for an unassigned team',()=>{render(<WorkspaceContext teamID={null}/>);expect(screen.getByText('Команда не назначена · Твой онбординг')).toBeVisible();expect(screen.queryByText('Платежи')).toBeNull();});
+});

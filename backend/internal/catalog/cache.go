@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"ai-buddy/backend/internal/authz"
 	"ai-buddy/backend/platform/demo"
 	"context"
 	"crypto/sha256"
@@ -35,7 +36,7 @@ var ErrSource = errors.New("DIRECTORY_UNAVAILABLE")
 
 func (d Directory) Resources(ctx context.Context, user string) ([]demo.Resource, error) {
 	p, err := d.Source.Profile(ctx, user)
-	if err != nil || !p.Enabled {
+	if err != nil || !p.Enabled || p.ID != user {
 		return nil, ErrSource
 	}
 	scope := envelope{UserID: p.ID, Version: p.PolicyVersion, Role: p.Role}
@@ -50,12 +51,20 @@ func (d Directory) Resources(ctx context.Context, user string) ([]demo.Resource,
 		if err == nil {
 			var saved envelope
 			if json.Unmarshal(data, &saved) == nil && saved.UserID == scope.UserID && saved.Version == scope.Version && saved.Role == scope.Role && saved.TeamID == scope.TeamID && saved.Items != nil {
+				current, e := d.Source.Profile(ctx, user)
+				if e != nil || !authz.SameScope(p, current) {
+					return nil, ErrSource
+				}
 				return visible(saved.Items), nil
 			}
 		}
 	}
 	resources, err := d.Source.Resources(ctx, p)
 	if err != nil {
+		return nil, ErrSource
+	}
+	current, e := d.Source.Profile(ctx, user)
+	if e != nil || !authz.SameScope(p, current) {
 		return nil, ErrSource
 	}
 	scope.Items = visible(resources)
