@@ -156,7 +156,11 @@ func (s *Server) reconcile(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
-	mode, _, err := s.fault(r.Context(), "access")
+	service := r.Header.Get("X-Service")
+	if service != "time_off" {
+		service = "access"
+	}
+	mode, _, err := s.fault(r.Context(), service)
 	if err != nil || mode == "reconciliation_unavailable" {
 		failure(w, 503, "SERVICE_UNAVAILABLE")
 		return

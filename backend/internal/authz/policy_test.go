@@ -6,6 +6,40 @@ import (
 	"time"
 )
 
+func TestScopeUsesValuesAndAllAuthorizationFields(t *testing.T) {
+	original := demo.Profiles()[0]
+	copy := original
+	team := *original.TeamID
+	copy.TeamID = &team
+	if !SameScope(original, copy) {
+		t.Fatal("equal team values treated as different scopes")
+	}
+	for name, change := range map[string]func(*demo.Profile){
+		"id":           func(p *demo.Profile) { p.ID = "maxim" },
+		"role":         func(p *demo.Profile) { p.Role = "buddy" },
+		"version":      func(p *demo.Profile) { p.PolicyVersion++ },
+		"disabled":     func(p *demo.Profile) { p.Enabled = false },
+		"start":        func(p *demo.Profile) { p.StartDate = "2027-01-01" },
+		"team":         func(p *demo.Profile) { team := "search"; p.TeamID = &team },
+		"missing team": func(p *demo.Profile) { p.TeamID = nil },
+		"buddy":        func(p *demo.Profile) { p.BuddyID = nil },
+		"manager":      func(p *demo.Profile) { p.ManagerID = nil },
+		"curator":      func(p *demo.Profile) { p.CuratorID = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := original
+			change(&changed)
+			if SameScope(original, changed) || SameScope(changed, original) {
+				t.Fatal("changed scope accepted")
+			}
+		})
+	}
+	p := demo.Profiles()[6]
+	if !SameScope(p, p) {
+		t.Fatal("nil team scope rejected")
+	}
+}
+
 func TestServiceAction(t *testing.T) {
 	now := time.Date(2026, 11, 12, 19, 30, 0, 0, time.UTC)
 	loc := time.FixedZone("demo", 5*3600)

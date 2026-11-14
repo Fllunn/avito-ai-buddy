@@ -7,16 +7,17 @@ import (
 	"encoding/json"
 	"github.com/jackc/pgx/v5"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
 
-const messageColumns = `id,sequence,user_id,client_message_id::text,role,kind,text,intent,form_required,created_at,slots`
+const messageColumns = `id,sequence,user_id,client_message_id::text,role,kind,text,intent,form_required,created_at,slots,metadata,ARRAY(SELECT l.run_id::text FROM execution_links l WHERE l.kind='message' AND l.object_id=messages.id::text AND l.user_id=messages.user_id ORDER BY l.run_id)`
 
 func scanMessage(row pgx.Row) (actions.Message, error) {
 	var m actions.Message
 	var slots []byte
-	err := row.Scan(&m.ID, &m.Sequence, &m.UserID, &m.ClientID, &m.Role, &m.Kind, &m.Text, &m.Intent, &m.FormRequired, &m.CreatedAt, &slots)
+	err := row.Scan(&m.ID, &m.Sequence, &m.UserID, &m.ClientID, &m.Role, &m.Kind, &m.Text, &m.Intent, &m.FormRequired, &m.CreatedAt, &slots, &m.Metadata, &m.ExecutionIDs)
 	if err == nil {
 		err = json.Unmarshal(slots, &m.Slots)
 	}
@@ -71,14 +72,21 @@ func (s *Store) acceptMessage(ctx context.Context, user, client, kind, intent st
 	if err != nil {
 		return actions.Message{}, false, err
 	}
-	message, err := scanMessage(tx.QueryRow(ctx, `INSERT INTO messages(user_id,sequence,client_message_id,role,kind,text,intent,form_required,created_at,slots) VALUES($1,$2,$3,'user',$4,$5,$6,$7,$8,$9) RETURNING `+messageColumns, user, sequence, client, kind, text.String(), intent, formRequired, now, payload))
+	message, err := scanMessage(tx.QueryRow(ctx, `INSERT INTO messages(user_id,sequence,client_message_id,role,kind,text,intent,form_required,created_at,slots,operational_created_at) VALUES($1,$2,$3,'user',$4,$5,$6,$7,$8,$9,$10) RETURNING `+messageColumns, user, sequence, client, kind, text.String(), intent, formRequired, now, payload, s.OperationalClock.Now()))
 	if err != nil {
 		return actions.Message{}, false, err
 	}
 	if _, err = tx.Exec(ctx, `UPDATE conversations SET next_sequence=next_sequence+1 WHERE user_id=$1`, user); err != nil {
 		return actions.Message{}, false, err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO jobs(id,user_id,message_id,kind,state,available_at,created_at) VALUES($1,$2,$3,'message','queued',$4,$4)`, actions.ID(), user, message.ID, now); err != nil {
+	jobID := actions.ID()
+	if _, err = tx.Exec(ctx, `INSERT INTO jobs(id,user_id,message_id,kind,state,available_at,created_at) VALUES($1,$2,$3,'message','queued',$4,$4)`, jobID, user, message.ID, s.OperationalClock.Now()); err != nil {
+		return actions.Message{}, false, err
+	}
+	if err := recordEvent(ctx, tx, user, "message:"+strconv.FormatInt(message.ID, 10), "chat_message_sent", kind, "accepted", 0, now); err != nil {
+		return actions.Message{}, false, err
+	}
+	if err = s.executionForMessage(ctx, tx, message, jobID); err != nil {
 		return actions.Message{}, false, err
 	}
 	return message, true, tx.Commit(ctx)

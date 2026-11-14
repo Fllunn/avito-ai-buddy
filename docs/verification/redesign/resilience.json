@@ -1,0 +1,11 @@
+{
+  "date": "2026-11-14",
+  "mode": "fake",
+  "checkpoints": [
+    "observed service duration 2045 ms under fixed business date",
+    "2 second service delay does not block plan or composer",
+    "guaranteed unavailable and retry use the same attempt",
+    "lost response is reconciled and produces exactly one service object",
+    "confirmed work retains its original owner after logout and user switch"
+  ]
+}

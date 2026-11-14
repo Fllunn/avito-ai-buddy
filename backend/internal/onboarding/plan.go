@@ -15,21 +15,39 @@ type Step struct {
 	Own     bool `json:"own"`
 }
 type Plan struct {
-	Steps           []Step `json:"steps"`
-	NextSteps       []Step `json:"next_steps"`
-	WaitingOnOthers []Step `json:"waiting_on_others"`
-	Requests        []any  `json:"requests"`
-	Week            int    `json:"week"`
-	ReadOnly        bool   `json:"read_only"`
-	AsOf            string `json:"as_of"`
+	Notices         []string      `json:"notices"`
+	Curator         *demo.Contact `json:"curator,omitempty"`
+	StartDate       string        `json:"start_date"`
+	RefreshJobID    string        `json:"refresh_job_id,omitempty"`
+	Steps           []Step        `json:"steps"`
+	NextSteps       []Step        `json:"next_steps"`
+	WaitingOnOthers []Step        `json:"waiting_on_others"`
+	Requests        []any         `json:"requests"`
+	Week            int           `json:"week"`
+	ReadOnly        bool          `json:"read_only"`
+	AsOf            string        `json:"as_of"`
 }
 
 func Project(profile demo.Profile, source []demo.Step, now time.Time, location *time.Location) Plan {
 	start, _ := clock.Date(profile.StartDate, location)
 	week := clock.Week(start, now, location)
-	result := Plan{Steps: []Step{}, NextSteps: []Step{}, WaitingOnOthers: []Step{}, Requests: []any{}, Week: week, ReadOnly: profile.Role == "intern" && week == 0, AsOf: now.UTC().Format(time.RFC3339)}
+	result := Plan{Notices: []string{}, StartDate: profile.StartDate, Steps: []Step{}, NextSteps: []Step{}, WaitingOnOthers: []Step{}, Requests: []any{}, Week: week, ReadOnly: profile.Role == "intern" && week == 0, AsOf: now.UTC().Format(time.RFC3339)}
 	if week == 0 {
 		result.Week = 1
+	}
+	if profile.Role == "intern" && profile.TeamID == nil {
+		result.Notices = append(result.Notices, "Команда не назначена. Показываю общий план и общие материалы; уточни профиль у куратора.")
+		if profile.CuratorID != nil {
+			for _, contact := range demo.Contacts() {
+				if contact.ID == *profile.CuratorID {
+					copy := contact
+					result.Curator = &copy
+				}
+			}
+		}
+	}
+	if result.ReadOnly {
+		result.Notices = append(result.Notices, "Старт стажировки: "+profile.StartDate+". До этой даты план доступен только для чтения.")
 	}
 	allowed := authz.Steps(profile, source)
 	done := map[string]bool{}
@@ -41,7 +59,7 @@ func Project(profile demo.Profile, source []demo.Step, now time.Time, location *
 		}
 	}
 	for _, step := range allowed {
-		blocked := false
+		blocked := profile.Role == "intern" && profile.TeamID == nil && (step.Code == "P6" || step.Code == "P7")
 		for _, dependency := range step.Dependencies {
 			if !done[dependency] {
 				blocked = true

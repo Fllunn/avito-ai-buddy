@@ -3,6 +3,7 @@ package storage
 import (
 	"ai-buddy/backend/internal/actions"
 	"ai-buddy/backend/internal/authz"
+	"ai-buddy/backend/internal/execution"
 	"context"
 	"github.com/jackc/pgx/v5"
 	"time"
@@ -36,12 +37,24 @@ func (s *Store) ReconcileNow(ctx context.Context, user, id string, now time.Time
 	if err != pgx.ErrNoRows {
 		return "", err
 	}
-	if state != "unknown" && state != "manual_review" {
+	if state != "unknown" && state != "manual_review" && state != "unavailable" {
 		return "", actions.ErrConflict
 	}
 	jobID := actions.ID()
 	if _, err = tx.Exec(ctx, `INSERT INTO jobs(id,user_id,attempt_id,kind,state,available_at,created_at) VALUES($1,$2,$3,'reconcile','queued',$4,$4)`, jobID, user, id, s.OperationalClock.Now()); err != nil {
 		return "", err
+	}
+	route, e := routeFor(ctx, tx, user, "attempt", id)
+	if e != nil {
+		return "", e
+	}
+	if route != "" {
+		if e = linkExecution(ctx, tx, route, user, execution.Link{Kind: "job", ID: jobID}); e != nil {
+			return "", e
+		}
+		if e = appendExecution(ctx, tx, route, fact("job:"+jobID+":reconcile", "reconciliation", "pending", "reconciling", "unknown", s.OperationalClock.Now())); e != nil {
+			return "", e
+		}
 	}
 	return jobID, tx.Commit(ctx)
 }
@@ -139,6 +152,9 @@ func (s *Store) Retry(ctx context.Context, user, id string, now time.Time, locat
 	latest.UpdatedAt = now
 	latest.JobID = actions.ID()
 	if _, err = tx.Exec(ctx, `INSERT INTO jobs(id,user_id,attempt_id,kind,state,available_at,created_at) VALUES($1,$2,$3,'send','queued',$4,$4)`, latest.JobID, user, latest.ID, s.OperationalClock.Now()); err != nil {
+		return actions.Attempt{}, err
+	}
+	if err = s.confirmExecution(ctx, tx, card, latest); err != nil {
 		return actions.Attempt{}, err
 	}
 	return latest, tx.Commit(ctx)

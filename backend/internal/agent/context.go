@@ -68,7 +68,7 @@ func (b Builder) Build(ctx context.Context, user string) (Context, error) {
 		}
 		result.Resources = append(result.Resources, r)
 	}
-	for _, m := range history {
+	for _, m := range AuthorizedHistory(result, history) {
 		if m.UserID != user {
 			continue
 		}
@@ -77,6 +77,7 @@ func (b Builder) Build(ctx context.Context, user string) (Context, error) {
 		if !actions.KnownIntent(m.Intent) {
 			m.Intent = ""
 		}
+		m.Metadata = nil
 		m.Text = safety.Prepare(ctx, safety.Local{}, m.Text).String()
 		copied := map[string]string{}
 		for key, value := range m.Slots {
@@ -91,7 +92,7 @@ func (b Builder) Build(ctx context.Context, user string) (Context, error) {
 		result.History = append(result.History, m)
 	}
 	current, err := b.Source.Profile(ctx, user)
-	if err != nil || !current.Enabled || current.PolicyVersion != p.PolicyVersion || current.Role != p.Role {
+	if err != nil || !authz.SameScope(p, current) {
 		return Context{}, ErrContext
 	}
 	return result, nil
@@ -99,7 +100,7 @@ func (b Builder) Build(ctx context.Context, user string) (Context, error) {
 
 func (b Builder) Current(ctx context.Context, frame Context) error {
 	current, err := b.Source.Profile(ctx, frame.Profile.ID)
-	if err != nil || !current.Enabled || current.ID != frame.Profile.ID || current.PolicyVersion != frame.Profile.PolicyVersion || current.Role != frame.Profile.Role {
+	if err != nil || !authz.SameScope(frame.Profile, current) {
 		return ErrContext
 	}
 	return nil

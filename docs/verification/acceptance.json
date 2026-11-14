@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-14",
+  "mode": "fake",
+  "checkpoints": [
+    "orientation: profile and next step",
+    "access: edit, stale version, confirmation, approved and P7",
+    "documents: grounded answer and working source",
+    "absence: submitted, approval, transfer with two confirmations, cancellation and reload",
+    "performance: 100 requests per local operation, p95 below 1 second",
+    "permissions: two teams, all four roles and foreign object denial"
+  ],
+  "page_errors": [],
+  "access_id": "ACC-1042",
+  "absence_id": "ABS-2001"
+}

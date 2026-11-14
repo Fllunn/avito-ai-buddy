@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-14",
+  "presentation": {
+    "file": "output/pdf/ai-buddy-presentation.pdf",
+    "pages": 12,
+    "all_slide_renders_reviewed": true,
+    "pptx_package_validation": "pass",
+    "layout_findings": 0,
+    "font": "Arial",
+    "powerpoint_execution_checked": false,
+    "sha256": "54c62175d701d014e1abbb962e930c3f686324e112abf44742f5880343589e18"
+  },
+  "video": {
+    "file": "output/demo/ai-buddy-demo.mp4",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1440,
+          "height": 1000
+        }
+      ],
+      "format": {
+        "duration": "37.960000"
+      }
+    },
+    "decoded_without_errors": true,
+    "actual_chromium_recording": true,
+    "playback_speed": 0.5,
+    "audio": false,
+    "sha256": "da56dec3007d814d82c233d9e4a516f22e36b275781b00e4ff5e2e185d593c3a"
+  },
+  "mode": "fake",
+  "human_acceptance": "pending"
+}

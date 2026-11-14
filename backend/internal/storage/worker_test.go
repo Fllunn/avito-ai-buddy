@@ -2,11 +2,15 @@ package storage
 
 import (
 	"ai-buddy/backend/internal/actions"
+	"ai-buddy/backend/internal/execution"
+	"ai-buddy/backend/internal/metrics"
 	"ai-buddy/backend/platform/clock"
 	"ai-buddy/backend/platform/demo"
+	"ai-buddy/backend/platform/safety"
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -69,6 +73,7 @@ func TestLeaseExpiryReconcilesPossibleSend(t *testing.T) {
 	if err != nil || a.State != "not_created" {
 		t.Fatal(a, err)
 	}
+	assertAttemptRoute(t, s, a.ID, "failed", "not_created")
 }
 func TestReconciliationScheduleSurvivesRestart(t *testing.T) {
 	s := testStore(t)
@@ -109,6 +114,7 @@ func TestReconciliationScheduleSurvivesRestart(t *testing.T) {
 			t.Fatal(a)
 		}
 	}
+	assertAttemptRoute(t, s, job.Attempt.ID, "manual_review", "manual_review")
 	if _, err := s.Claim(ctx, next.Add(24*time.Hour), time.Minute); err != actions.ErrNoWork {
 		t.Fatal("manual review continued automatically", err)
 	}
@@ -367,5 +373,182 @@ func TestRefreshProjectionUsesSameVersionRules(t *testing.T) {
 	var version int64
 	if err := s.Pool.QueryRow(ctx, `SELECT service_version FROM service_objects WHERE object_id='ACC-9004'`).Scan(&version); err != nil || version != 3 {
 		t.Fatal(version, err)
+	}
+}
+
+func TestMetricsUseLatestAttemptAndExcludeRawData(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 11, 12, 7, 0, 0, 0, time.UTC)
+	s.RecordCall(ctx, "alina", "fake:recognize", "ok", 25)
+	s.RecordCall(ctx, "alina", "fake:recognize", "timeout", 40)
+	s.RecordCall(ctx, "alina", "raw-private-code", "raw-secret", 1)
+	s.RecordLocal(ctx, "alina", "plan", 7)
+	var raw []byte
+	if e := s.Pool.QueryRow(ctx, metrics.ReportSQL).Scan(&raw); e != nil {
+		t.Fatal(e)
+	}
+	var report map[string]any
+	if json.Unmarshal(raw, &report) != nil || report["mode"] != "technical_proxies_only" || strings.Contains(string(raw), "raw-secret") {
+		t.Fatal(string(raw))
+	}
+	var count int
+	if e := s.Pool.QueryRow(ctx, `SELECT count(*) FROM events WHERE code='llm_call' AND scenario='raw-private-code'`).Scan(&count); e != nil || count != 0 {
+		t.Fatal(count, e)
+	}
+	if e := s.ExpireDrafts(ctx, now.Add(10*365*24*time.Hour)); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestExpiredUnavailableCanBeClosedBeforeFreshConfirmation(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	s.OperationalClock = clock.Fixed{Instant: time.Date(2026, 11, 12, 7, 0, 0, 0, time.UTC)}
+	reservationKey := "expiry:" + actions.ID()
+	validate := func(context.Context, demo.Profile, actions.Card) (actions.Reservation, error) {
+		return actions.Reservation{Key: reservationKey}, nil
+	}
+	now := time.Date(2027, 1, 11, 7, 0, 0, 0, time.UTC)
+	card, e := s.CreateCard(ctx, "alina", "access_create", json.RawMessage(`{"resource_id":"monitoring"}`), now, time.Hour)
+	if e != nil {
+		t.Fatal(e)
+	}
+	attempt, e := s.ConfirmCard(ctx, "alina", card.ID, 1, now, time.UTC, validate)
+	if e != nil {
+		t.Fatal(e)
+	}
+	work, e := s.Claim(ctx, s.OperationalClock.Now(), time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Finish(ctx, work, actions.Result{Kind: actions.Unavailable, Code: "SERVICE_UNAVAILABLE", Source: "service"}, now); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Retry(ctx, "alina", attempt.ID, now.Add(time.Hour), time.UTC, validate); e != actions.ErrExpired {
+		t.Fatal(e)
+	}
+	if _, e = s.ReconcileNow(ctx, "alina", attempt.ID, now.Add(time.Hour)); e != nil {
+		t.Fatal(e)
+	}
+	work, e = s.Claim(ctx, s.OperationalClock.Now(), time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.NotCreated(ctx, work, now.Add(time.Hour)); e != nil {
+		t.Fatal(e)
+	}
+	fresh, e := s.CreateCard(ctx, "alina", "access_create", card.Parameters, now.Add(time.Hour), time.Hour)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var count int
+	if e = s.Pool.QueryRow(ctx, `SELECT count(*) FROM attempts WHERE card_id=$1`, fresh.ID).Scan(&count); e != nil || count != 0 {
+		t.Fatal("fresh draft executed without confirmation", count, e)
+	}
+	confirmed, e := s.ConfirmCard(ctx, "alina", fresh.ID, 1, now.Add(time.Hour), time.UTC, validate)
+	if e != nil || confirmed.OperationKey == attempt.OperationKey {
+		t.Fatal(confirmed, e)
+	}
+	// Leave the shared test fixture without an active reservation.
+	work, e = s.Claim(ctx, s.OperationalClock.Now(), time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Finish(ctx, work, actions.Result{Kind: actions.Rejected, Code: "NOT_ALLOWED", Source: "local_validation"}, now.Add(time.Hour)); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestMetricsDeduplicateSourceAndSavedAction(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	work, now := jobFixture(t, s)
+	ids := []int64{}
+	for i := 0; i < 3; i++ {
+		m, _, err := s.AcceptMessage(ctx, "alina", actions.ID(), "text", "", safety.Prepare(ctx, safety.Local{}, "Демонстрационный вопрос"), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, m.ID)
+	}
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	// Limit this transaction's report to a controlled cohort; rollback preserves history.
+	if _, err = tx.Exec(ctx, `DELETE FROM jobs WHERE kind='message' AND NOT(message_id=ANY($1::bigint[]))`, ids); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `UPDATE cards SET origin_message_id=$2 WHERE id=$1;`, work.Attempt.CardID, ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `UPDATE attempts SET state='succeeded' WHERE id=$1`, work.Attempt.ID); err != nil {
+		t.Fatal(err)
+	}
+	for i, id := range ids {
+		result := `{"items":[{"answer":{"sources":[{"id":"demo"}]}}]}`
+		if i == 1 {
+			result = `{"items":[{"answer":{"sources":[{"id":"demo"}]}},{"contact":{"contact":{"id":"igor"}}}]}`
+		}
+		if i == 2 {
+			result = `{"items":[]}`
+		}
+		if _, err = tx.Exec(ctx, `UPDATE jobs SET state='done',result=$2,payload='{"intent":"find_doc"}' WHERE message_id=$1`, id, result); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var raw []byte
+	if err = tx.QueryRow(ctx, metrics.ReportSQL).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		Resolution struct {
+			Resolved  float64 `json:"resolved_messages"`
+			Questions float64 `json:"organizational_messages"`
+			Ratio     float64 `json:"ratio"`
+		} `json:"U-2"`
+	}
+	if err = json.Unmarshal(raw, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Resolution.Resolved != 1 || report.Resolution.Questions != 3 || report.Resolution.Ratio != 1.0/3 {
+		t.Fatal(string(raw))
+	}
+}
+
+func TestObjectObservationUsesOperationalClockAndIsStable(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	business := time.Date(2026, 11, 12, 7, 0, 0, 0, time.UTC)
+	operational := time.Date(2026, 11, 14, 8, 0, 0, 0, time.UTC)
+	s.OperationalClock = clock.Fixed{Instant: operational}
+	object := objectResult("ACC-990019", "approved", 1, business).Object
+	if err := s.ApplyObject(ctx, "alina", *object, business); err != nil {
+		t.Fatal(err)
+	}
+	s.OperationalClock = clock.Fixed{Instant: operational.Add(time.Hour)}
+	if err := s.ApplyObject(ctx, "alina", *object, business); err != nil {
+		t.Fatal(err)
+	}
+	var observed time.Time
+	if err := s.Pool.QueryRow(ctx, `SELECT observed_at FROM service_objects WHERE object_id=$1`, object.ID).Scan(&observed); err != nil || !observed.Equal(operational) {
+		t.Fatal(observed, err)
+	}
+}
+
+func assertAttemptRoute(t *testing.T, s *Store, attempt, state, result string) {
+	t.Helper()
+	ids, e := s.ExecutionIDs(context.Background(), "alina", "attempt", attempt)
+	if e != nil || len(ids) != 1 {
+		t.Fatal(ids, e)
+	}
+	page, e := (ExecutionRepository{Store: s}).Read(context.Background(), "alina", ids[0], 0, 100)
+	if e != nil || page.Snapshot.State != state || page.Snapshot.ResultCode != result {
+		t.Fatal(page, e)
+	}
+	if state == "manual_review" && execution.Active(page.Snapshot.State) {
+		t.Fatal("manual review kept polling")
 	}
 }

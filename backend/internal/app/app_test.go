@@ -1,9 +1,13 @@
 package app
 
 import (
+	"ai-buddy/backend/internal/actions"
+	"ai-buddy/backend/internal/storage"
 	"ai-buddy/backend/platform/config"
 	"context"
+	"github.com/jackc/pgx/v5"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -11,14 +15,32 @@ import (
 )
 
 func TestFactory(t *testing.T) {
-	url := os.Getenv("TEST_API_DATABASE_URL")
-	if url == "" {
+	databaseURL := os.Getenv("TEST_API_DATABASE_URL")
+	if databaseURL == "" {
 		t.Skip("make integration-test")
 	}
+	admin, e := storage.Open(context.Background(), databaseURL)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer admin.Close()
+	schema := pgx.Identifier{"app_" + strings.ReplaceAll(actions.ID(), "-", "")}.Sanitize()
+	if _, e = admin.Pool.Exec(context.Background(), "CREATE SCHEMA "+schema); e != nil {
+		t.Fatal(e)
+	}
+	defer admin.Pool.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE")
+	parsed, e := url.Parse(databaseURL)
+	if e != nil {
+		t.Fatal(e)
+	}
+	q := parsed.Query()
+	q.Set("search_path", schema)
+	parsed.RawQuery = q.Encode()
+	databaseURL = parsed.String()
 	cfg, err := config.Load(func(key string) string {
 		switch key {
 		case "DATABASE_URL":
-			return url
+			return databaseURL
 		case "SERVICE_SECRET":
 			return strings.Repeat("x", 32)
 		case "DEMO_MODE":

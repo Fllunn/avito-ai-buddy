@@ -1,0 +1,21 @@
+:root {
+ --surface-page:#f5f4f8; --surface-card:#fff; --surface-soft:#eeebf8;
+ --text-primary:#292638; --text-secondary:#615d70; --action-primary:#5940b3;
+ --status-success:#25633d; --status-warning:#795000; --status-error:#a62e3c;
+ --focus-ring:#5940b3; --border-control:#827b95;
+ font-family:Inter,Arial,sans-serif; color:var(--text-primary); background:var(--surface-page);
+}
+.live-app button {min-height:44px;border:1px solid var(--border-control);border-radius:12px;padding:10px 16px;color:var(--text-primary);background:var(--surface-card);font:inherit;font-size:15px;transition:background 160ms}
+.live-app button:hover:not(:disabled){background:var(--surface-soft)}
+.live-app .primary,.live-app .composer>button{background:var(--action-primary);color:white;border-color:var(--action-primary)}
+.live-app :is(button,input,select,textarea,a,summary):focus-visible{outline:3px solid var(--focus-ring);outline-offset:3px}
+.live-app input,.live-app select,.live-app textarea{border-color:var(--border-control);font:inherit;color:var(--text-primary)}
+.live-app fieldset{border:1px solid var(--border-control);border-radius:12px;margin:16px 0;padding:16px;min-width:0}
+.live-app legend{font-weight:650;padding:0 6px}.field-hint{color:var(--text-secondary)}.field-error{color:var(--status-error)}
+.surface-panel{background:var(--surface-card);border-radius:24px;padding:24px}
+.status{display:inline-block;border-radius:6px;padding:4px 8px;background:var(--surface-soft);font-size:13px;color:var(--text-secondary)}
+.status-success{color:var(--status-success)}.status-warning{color:var(--status-warning)}.status-error{color:var(--status-error)}
+.workspace-dialog{width:min(760px,calc(100% - 32px));max-height:calc(100dvh - 32px);border:1px solid var(--border-control);border-radius:24px;padding:24px;color:var(--text-primary);overflow:auto;overflow-wrap:anywhere}
+.workspace-dialog::backdrop{background:#29263866}.workspace-dialog>header{display:flex;justify-content:space-between;align-items:center;gap:16px}.workspace-dialog h2{font-size:21px;line-height:26px}
+@media(max-width:600px){.workspace-dialog{width:100%;max-width:100%;max-height:100dvh;margin:0;min-height:100dvh;border-radius:0;padding:18px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}

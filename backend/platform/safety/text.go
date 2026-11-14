@@ -24,9 +24,9 @@ type Cleaner interface {
 }
 type Local struct{}
 
-var secrets = regexp.MustCompile(`(?i)(?:\b(?:sk-[a-z0-9_-]{8,}|gh[pousr]_[a-z0-9_]{8,})\b|(?:bearer|api[_ -]?key|токен|пароль|password|secret)\s*[:=]?\s*[^\s,;]+)`)
+var secrets = regexp.MustCompile(`(?i)(?:\b(?:sk-[a-z0-9_-]{8,}|gh[pousr]_[a-z0-9_]{8,})\b|(?:bearer|api[_ -]?key|token|токен|пароль|password|secret)\s*[:=]?\s*[^\s,;]+)`)
 var numbers = regexp.MustCompile(`\b(?:\d[ -]?){12,19}\b`)
-var suspicion = regexp.MustCompile(`(?i)(диагноз|боле[юет]|забол|грипп|ковид|covid|онколог|депресси|беремен|лечени|медицин|больниц|болезн|здоровь|паспорт|снилс|документ.{0,20}номер|банковск|кредитн|семейн|реб[её]нок|реб[её]нк|сын[ау]?\b|доч[ьи]|мам[аыу]|пап[аыу]|родител|супруг|развод|умер|инсулин|диабет)`)
+var suspicion = regexp.MustCompile(`(?i)(диагноз|боле[юет]|забол|грипп|ковид|covid|онколог|депресси|беремен|лечени|медицин|больниц|болезн|здоровь|температур|врач|поликлиник|симптом|паспорт|снилс|документ.{0,20}номер|банковск|кредитн|семейн|реб[её]нок|реб[её]нк|сын(?:а|у|ом)?(?:$|[^\p{L}])|доч[ьи]|мам[аыу]|пап[аыу]|родител|супруг|развод|умер|инсулин|диабет)`)
 
 func (Local) Clean(ctx context.Context, raw string) (string, bool, error) {
 	if err := ctx.Err(); err != nil {

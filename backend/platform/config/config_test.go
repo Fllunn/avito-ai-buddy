@@ -115,3 +115,19 @@ func TestPresenterConfiguration(t *testing.T) {
 		t.Fatal("invalid presenter origin")
 	}
 }
+
+func TestOpenRouterConfiguration(t *testing.T) {
+	for _, values := range []map[string]string{
+		{"LLM_PROVIDER": "openrouter"},
+		{"LLM_PROVIDER": "openrouter", "LLM_MODEL": "vendor/model"},
+		{"LLM_PROVIDER": "openrouter", "OPENROUTER_API_KEY": "synthetic-key"},
+	} {
+		if _, err := Load(environment(values)); err == nil {
+			t.Fatal("incomplete real provider accepted")
+		}
+	}
+	cfg, err := Load(environment(map[string]string{"LLM_PROVIDER": "openrouter", "LLM_MODEL": "vendor/model", "OPENROUTER_API_KEY": "synthetic-key"}))
+	if err != nil || cfg.LLMModel != "vendor/model" || cfg.OpenRouterKey != "synthetic-key" {
+		t.Fatal("configured model ignored", err)
+	}
+}

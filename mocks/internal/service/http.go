@@ -35,6 +35,18 @@ var uuid = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		if s.Store.Pool.Ping(r.Context()) != nil {
+			failure(w, 503, "SERVICE_UNAVAILABLE")
+			return
+		}
+		response(w, 200, map[string]string{"status": "ready"})
+	})
+	mux.HandleFunc("GET /v1/time-off-rules", s.timeOffRules)
+	mux.HandleFunc("GET /v1/time-off-requests", s.listTimeOff)
+	mux.HandleFunc("GET /v1/time-off-requests/{id}", s.getTimeOff)
+	mux.HandleFunc("POST /v1/time-off-requests", s.createTimeOff)
+	mux.HandleFunc("POST /v1/time-off-requests/{id}/cancel", s.cancelTimeOff)
 	mux.HandleFunc("GET /v1/resources", s.resources)
 	mux.HandleFunc("GET /v1/grants", s.grants)
 	mux.HandleFunc("GET /v1/access-requests", s.listAccess)

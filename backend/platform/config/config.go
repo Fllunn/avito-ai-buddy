@@ -32,6 +32,7 @@ type Config struct {
 	ReconcileDelays     []time.Duration
 	LLMProvider         string
 	LLMModel            string
+	OpenRouterKey       string
 }
 
 // Load never includes supplied values in errors: URLs may contain credentials.
@@ -53,6 +54,7 @@ func Load(getenv func(string) string) (Config, error) {
 		DemoPanelOrigin: value("DEMO_PANEL_ORIGIN", "http://localhost:8081"),
 		LLMProvider:     value("LLM_PROVIDER", "fake"),
 		LLMModel:        getenv("LLM_MODEL"),
+		OpenRouterKey:   getenv("OPENROUTER_API_KEY"),
 	}
 	var err error
 	c.DemoMode, err = strconv.ParseBool(value("DEMO_MODE", "false"))
@@ -89,11 +91,14 @@ func Load(getenv func(string) string) (Config, error) {
 	if c.DemoAdminSecret != "" && (len(c.DemoAdminSecret) < 32 || c.DemoAdminSecret == c.ServiceSecret) {
 		return Config{}, fmt.Errorf("DEMO_ADMIN_SECRET must be distinct and contain at least 32 bytes")
 	}
-	if c.LLMProvider != "fake" {
-		return Config{}, fmt.Errorf("LLM_PROVIDER adapter is not implemented; use fake")
+	if c.LLMProvider != "fake" && c.LLMProvider != "openrouter" {
+		return Config{}, fmt.Errorf("LLM_PROVIDER must be fake or openrouter")
 	}
-	if c.LLMModel != "" {
+	if c.LLMProvider == "fake" && c.LLMModel != "" {
 		return Config{}, fmt.Errorf("LLM_MODEL must be empty for fake provider")
+	}
+	if c.LLMProvider == "openrouter" && (strings.TrimSpace(c.LLMModel) == "" || strings.TrimSpace(c.OpenRouterKey) == "") {
+		return Config{}, fmt.Errorf("openrouter requires LLM_MODEL and OPENROUTER_API_KEY")
 	}
 	settings := []struct {
 		key, fallback string
