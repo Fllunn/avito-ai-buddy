@@ -7,15 +7,18 @@
 }
 .live-app button {min-height:44px;border:1px solid var(--border-control);border-radius:12px;padding:10px 16px;color:var(--text-primary);background:var(--surface-card);font:inherit;font-size:15px;transition:background 160ms}
 .live-app button:hover:not(:disabled){background:var(--surface-soft)}
+.live-app button:disabled{opacity:1;color:#625d70;background:#eeebf2;border-color:#aaa4b3;cursor:not-allowed}
 .live-app .primary,.live-app .composer>button{background:var(--action-primary);color:white;border-color:var(--action-primary)}
+.live-app .primary:disabled,.live-app .composer>button:disabled{color:#625d70;background:#eeebf2;border-color:#aaa4b3}
 .live-app :is(button,input,select,textarea,a,summary):focus-visible{outline:3px solid var(--focus-ring);outline-offset:3px}
 .live-app input,.live-app select,.live-app textarea{border-color:var(--border-control);font:inherit;color:var(--text-primary)}
 .live-app fieldset{border:1px solid var(--border-control);border-radius:12px;margin:16px 0;padding:16px;min-width:0}
 .live-app legend{font-weight:650;padding:0 6px}.field-hint{color:var(--text-secondary)}.field-error{color:var(--status-error)}
 .surface-panel{background:var(--surface-card);border-radius:24px;padding:24px}
-.status{display:inline-block;border-radius:6px;padding:4px 8px;background:var(--surface-soft);font-size:13px;color:var(--text-secondary)}
-.status-success{color:var(--status-success)}.status-warning{color:var(--status-warning)}.status-error{color:var(--status-error)}
+.status{display:inline-block;border:1px solid #d3cfdb;border-radius:8px;padding:3px 8px;background:#f3f1f5;font-size:13px;line-height:18px;font-weight:600;color:#514d5b}
+.status-info{color:#174e79;background:#eaf4fc;border-color:#b6d4eb}.status-success{color:#205b35;background:#e8f5ec;border-color:#b5d9bf}.status-warning{color:#704800;background:#fff3d8;border-color:#e6ca89}.status-error{color:#922737;background:#fff0f0;border-color:#eab5ba}
 .workspace-dialog{width:min(760px,calc(100% - 32px));max-height:calc(100dvh - 32px);border:1px solid var(--border-control);border-radius:24px;padding:24px;color:var(--text-primary);overflow:auto;overflow-wrap:anywhere}
 .workspace-dialog::backdrop{background:#29263866}.workspace-dialog>header{display:flex;justify-content:space-between;align-items:center;gap:16px}.workspace-dialog h2{font-size:21px;line-height:26px}
+.workspace-dialog>header h2{min-width:0}.workspace-dialog>header button{flex-shrink:0;white-space:nowrap}
 @media(max-width:600px){.workspace-dialog{width:100%;max-width:100%;max-height:100dvh;margin:0;min-height:100dvh;border-radius:0;padding:18px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}

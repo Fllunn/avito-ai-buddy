@@ -159,6 +159,12 @@ func (s *Store) Finish(ctx context.Context, job actions.Work, result actions.Res
 	return tx.Commit(ctx)
 }
 func saveObject(ctx context.Context, tx pgx.Tx, job actions.Work, object actions.Object, now, operationalNow time.Time) error {
+	if object.Service == "access" {
+		// Serialize the aggregate before writing any of its constituent objects.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "access-plan:"+object.UserID+":"+object.ResourceID); err != nil {
+			return err
+		}
+	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, object.Service+":"+object.ID); err != nil {
 		return err
 	}
@@ -178,6 +184,9 @@ func saveObject(ctx context.Context, tx pgx.Tx, job actions.Work, object actions
 				return actions.ErrContract
 			}
 			_, err = tx.Exec(ctx, `UPDATE service_objects SET checked_at=$3 WHERE service=$1 AND object_id=$2`, object.Service, object.ID, now)
+			if err == nil && object.Service == "access" {
+				err = projectAccessPlan(ctx, tx, object)
+			}
 			return err
 		}
 	}
@@ -189,8 +198,7 @@ func saveObject(ctx context.Context, tx pgx.Tx, job actions.Work, object actions
 		return err
 	}
 	if object.Service == "access" {
-		status := map[string]string{"created": "waiting", "in_review": "waiting", "approved": "done", "rejected": "attention", "cancelled": "not_started"}[object.Status]
-		if _, err = tx.Exec(ctx, `UPDATE plan_steps SET status=$2,source=$3,updated_at=$4,version=version+1 WHERE intern_id=$1 AND code='P6' AND EXISTS(SELECT 1 FROM users u WHERE u.id=$1 AND $5='space-'||u.team_id)`, object.UserID, status, "сервис заявок, заявка "+object.ID, object.UpdatedAt, object.ResourceID); err != nil {
+		if err = projectAccessPlan(ctx, tx, object); err != nil {
 			return err
 		}
 	}
@@ -202,6 +210,23 @@ func saveObject(ctx context.Context, tx pgx.Tx, job actions.Work, object actions
 		return err
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO events(event_id,user_id,attempt_id,code,scenario,outcome,duration_ms,created_at) VALUES($1,$2,$3,'status_changed',$4,$5,0,$6) ON CONFLICT DO NOTHING`, object.Service+":"+object.ID+":"+strconv.FormatInt(object.Version, 10), object.UserID, optionalID(job.Attempt.ID), object.Service, object.Status, now)
+	return err
+}
+
+func projectAccessPlan(ctx context.Context, tx pgx.Tx, object actions.Object) error {
+	// Approved requests represent an existing grant. Otherwise the newest
+	// request determines the plan, regardless of response delivery order.
+	var current actions.Object
+	var payload []byte
+	err := tx.QueryRow(ctx, `SELECT payload FROM service_objects WHERE service='access' AND user_id=$1 AND payload->>'resource_id'=$2 ORDER BY (payload->>'status'='approved') DESC,(payload->>'created_at')::timestamptz DESC,object_id DESC LIMIT 1`, object.UserID, object.ResourceID).Scan(&payload)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(payload, &current); err != nil {
+		return err
+	}
+	status := map[string]string{"created": "waiting", "in_review": "waiting", "approved": "done", "rejected": "attention", "cancelled": "not_started"}[current.Status]
+	_, err = tx.Exec(ctx, `UPDATE plan_steps SET status=$2,source=$3,updated_at=$4,version=version+1 WHERE intern_id=$1 AND code='P6' AND EXISTS(SELECT 1 FROM users u WHERE u.id=$1 AND $5='space-'||u.team_id) AND (status IS DISTINCT FROM $2 OR source IS DISTINCT FROM $3 OR updated_at IS DISTINCT FROM $4)`, object.UserID, status, "сервис заявок, заявка "+current.ID, current.UpdatedAt, object.ResourceID)
 	return err
 }
 func statusLabel(status string) string {

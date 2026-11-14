@@ -1,7 +1,7 @@
 export function Logo() {
   return (
     <div className="logo">
-      <span className="logo-shapes">
+      <span className="logo-shapes" aria-hidden="true">
         <i />
         <i />
         <i />
