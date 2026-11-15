@@ -1,0 +1,89 @@
+{
+  "review": "isolation-review",
+  "date": "2026-11-15",
+  "commit": "4afe6ef",
+  "question": "Может ли один пользователь увидеть или изменить данные другого",
+  "answer": "Через API, чат, план, карточки, маршруты, ответы бота и контекст LLM — нет; P0/P1 не найдено",
+  "summary": {"P0": 0, "P1": 0, "P2": 2, "P3": 3},
+  "findings": [
+    {
+      "id": "IR-01",
+      "level": "P2",
+      "title": "Проекция заявки service_objects не привязана к владельцу",
+      "location": ["backend/internal/storage/results.go:197", "backend/internal/storage/results.go:173", "backend/internal/storage/migrations/002_actions.sql:87"],
+      "scenario": "Сервис выдаёт другому пользователю номер ABS-…, уже сохранённый у Алины; upsert перезаписывает payload, user_id строки остаётся alina",
+      "condition": "Повторный номер у другого пользователя (пересоздание БД имитаций, восстановление, ошибка адаптера); пользователь условие не контролирует. Для ACC- транзакция случайно откатывается в projectAccessPlan",
+      "impact": "В плане Алины видны даты, статус и причина отказа Максима",
+      "contract": "identity-and-permissions: Личные данные и назначения; AGENTS.md: Права пользователя",
+      "evidence": {"test": "TestIsoServiceObjectOwnerNotBound", "file": "evidence/isoreview_api_test.go", "result": "FAIL", "log": "time_off reuse: err=<nil> row.user_id=alina payload.user_id=maxim alina_plan_has_maxim=true"},
+      "fix": "Не обновлять запись при другом владельце (условие в DO UPDATE + ErrContract), проверять владельца найденной строки, включить user_id в ключ проекции и уведомлений",
+      "status": "confirmed-by-test"
+    },
+    {
+      "id": "IR-03",
+      "level": "P2",
+      "title": "Глобальные id сообщений раскрывают объём активности других пользователей",
+      "location": ["backend/internal/storage/migrations/002_actions.sql:6", "backend/internal/api/business.go:174", "backend/internal/storage/messages.go:15"],
+      "scenario": "Максим получает message_id 1, Алина пишет 3 сообщения, следующий message_id Максима 5; в ленте ids=[1 5 6]",
+      "condition": "Без условий, любой вошедший пользователь",
+      "impact": "Ограниченная утечка признаков: число и время сообщений всех остальных пользователей; содержимое не раскрывается",
+      "contract": "agent-execution-visibility: Авторизация каждого чтения (по духу); identity-and-permissions: Проверки до раскрытия",
+      "evidence": {"test": "TestIsoSideChannelGlobalMessageIDs", "file": "evidence/isoreview_api_test.go", "result": "FAIL", "log": "maxim message_id 1 -> 5; chat ids=[1 5 6]; gap=3 (alina sent 3)"},
+      "fix": "Наружу отдавать непрозрачный id (UUID/client_message_id) или личную sequence; внутренний bigint оставить для связей",
+      "status": "confirmed-by-test"
+    },
+    {
+      "id": "IR-02",
+      "level": "P3",
+      "title": "OfferNext соединяет dialogue_state с карточкой и попытками без user_id",
+      "location": ["backend/internal/storage/runtime.go:436", "backend/internal/storage/runtime.go:465"],
+      "scenario": "В dialogue_state Максима card_id карточки Алины (подделано в БД; через API card_id пишет только сервер)",
+      "condition": "Недостижимо через API; защита в глубину",
+      "impact": "Закрытие карточки Алины порождает приглашение в ленте Максима; статус чужой попытки влияет на перенос",
+      "contract": "AGENTS.md: Права пользователя (проверки на бэкенде)",
+      "evidence": {"test": "TestIsoOfferNextJoinsForeignCard", "file": "evidence/isoreview_api_test.go", "result": "FAIL", "log": "offered=true maxim messages 1 -> 2"},
+      "fix": "Добавить c.user_id=d.user_id и user_id в подзапросы attempts и чтение статуса переноса",
+      "status": "confirmed-by-test"
+    },
+    {
+      "id": "IR-04",
+      "level": "P3",
+      "title": "Вкладка не сверяет владельца ответа с профилем; вторая вкладка смешивает профили",
+      "location": ["frontend/src/App.tsx:34", "frontend/src/App.tsx:38"],
+      "scenario": "Алина в двух вкладках; во второй выбран Максим; первая при обновлении ленты показывает данные Максима под «Привет, Алина!»",
+      "condition": "Два профиля в одном браузере (общий cookie)",
+      "impact": "Смешение отображения и отправка сообщения не от того профиля; серверная изоляция не нарушается",
+      "contract": "assistant-dialogue: Переключение пользователя (по духу)",
+      "evidence": {"test": "isolation: second tab of the same browser (P3 demo)", "file": "evidence/isoreview_app.test.tsx", "result": "FAIL", "log": "AssertionError: expected true to be false"},
+      "fix": "Владелец/версия сессии в ответах chat и onboarding, сброс состояния при несовпадении с me; BroadcastChannel между вкладками",
+      "status": "confirmed-by-test"
+    },
+    {
+      "id": "IR-05",
+      "level": "P3",
+      "title": "Сверка в имитации закрепляет неизвестный ключ и различает чужой ключ",
+      "location": ["mocks/internal/service/operations.go:186"],
+      "scenario": "reconcile чужого ключа -> 404, неизвестного -> 200 not_created за вызывающим; create Алины с закреплённым Максимом ключом -> 404",
+      "condition": "Только обладатель SERVICE_SECRET; API генерирует UUID v4 и не показывает их",
+      "impact": "Оракул существования ключа и блокировка чужого неиспользованного ключа на уровне сервисного доверия",
+      "contract": "Формально нет; модель доверия SERVICE_SECRET в docs/architecture.md",
+      "evidence": {"test": "TestIsoMocksOperationKeysPerActor", "file": "evidence/isoreview_mocks_test.go", "result": "PASS (фиксирует поведение)"},
+      "fix": "Ключ операции в пространстве владельца (actor_id, operation_key) или подписанный токен пользователя",
+      "status": "confirmed-by-test"
+    }
+  ],
+  "clean": [
+    {"area": "1. Параллельная работа стажёров, курсоры", "test": "TestIsoParallelInternsSeeOnlyOwnData", "result": "PASS"},
+    {"area": "2. Контекст LLM (Recognize, SelectFragments)", "test": "TestIsoLLMContextContainsOnlyOwnData", "result": "PASS"},
+    {"area": "3. Фоновые обработчики, lease, перезапуск, dialogue_state, OfferNext", "test": "TestIsoBackgroundLeaseRestartAndDialogueState", "result": "PASS"},
+    {"area": "4. Коллизии client_message_id и чужие ID", "test": "TestIsoIdentifierCollisions", "result": "PASS"},
+    {"area": "5. Сессии в одном браузере (backend)", "test": "TestIsoSessionSwitchInOneBrowser", "result": "PASS"},
+    {"area": "5. Сессии в одной вкладке (frontend)", "test": "isoreview_app.test.tsx: 3 теста", "result": "PASS"},
+    {"area": "6. Роли и документы команды", "test": "TestIsoRoleProjectionsAndTeamDocuments", "result": "PASS"},
+    {"area": "7. Имитации", "test": "TestIsoMocksPerActorProjections, TestIsoMocksActorHeaderIsExact, TestIsoMocksOperationKeysPerActor", "result": "PASS"},
+    {"area": "8. События, связи, тела ошибок", "test": "TestIsoEventsAndCountersAreOwnerScoped", "result": "PASS"},
+    {"area": "8. Redis-кэш каталога", "test": "TestIsoCatalogCacheIsPerUser", "result": "PASS"}
+  ],
+  "not_checked": ["реальная модель OpenRouter", "тайминговые каналы", "black-box прогон образов и реальный браузер", "нагрузка с многими пользователями", "логи процессов на стенде"],
+  "environment": {"compose_project": "isoreview-8593 (удалён с томами)", "copy": "git archive HEAD во временный каталог", "llm": "recordingProvider поверх agent.Fake", "node": "24.22.0"}
+}
