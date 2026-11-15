@@ -86,7 +86,7 @@ func (s *fakeIdentities) DeleteSession(_ context.Context, token string) error {
 }
 func testServer(s IdentityStore, demoMode bool) http.Handler {
 	now, _ := time.Parse(time.RFC3339, "2026-11-12T07:00:00Z")
-	return New(s, Config{Demo: demoMode, Origin: "http://localhost:5173", Clock: clock.Fixed{Instant: now}, SessionTTL: time.Hour, Location: time.FixedZone("demo", 5*3600)})
+	return New(s, Config{Demo: demoMode, Origin: "http://localhost:5173", Clock: clock.Fixed{Instant: now}, SessionClock: clock.Fixed{Instant: now}, SessionTTL: time.Hour, Location: time.FixedZone("demo", 5*3600)})
 }
 func request(h http.Handler, method, path, body, origin string, cookie *http.Cookie) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, path, strings.NewReader(body))

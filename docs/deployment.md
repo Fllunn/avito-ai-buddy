@@ -38,3 +38,15 @@ node frontend/test/e2e/deployment-smoke.mjs
 ```
 
 Скрипт проверяет TLS, серверный отказ без сессии, cookie, вход, план, чат, ссылки документов и перезагрузку; снимок сохраняется в output/deployment/smoke.png.
+
+## Заголовки безопасности и рекомендации для внедрения
+
+Вложенный `frontend/nginx.conf` добавляет ко всем ответам, включая проксированные `/api/` и `/demo/docs/`, заголовки `Content-Security-Policy` (`default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` и `Referrer-Policy: no-referrer`. Политика `connect-src 'self'` рассчитана на API того же origin; при сборке с отдельным `VITE_API_BASE_URL` origin API нужно добавить в `connect-src`.
+
+Рекомендации, не входящие в текущий стенд (ревью безопасности 15.11.2026, SR-04 и SR-06):
+
+- HSTS (`Strict-Transport-Security`) задаётся во внешнем TLS-nginx сервера, а не во вложенном контейнере.
+- Стенд делит origin `https://semenovm.ru` с другими приложениями: `proxy_cookie_path` не изолирует cookie от скриптов того же origin. Для изоляции разместить стенд на отдельном поддомене и указать его в `ALLOWED_ORIGIN`.
+- Разделить роль владельца схемы для миграций и рабочую роль приложения только с DML-правами в PostgreSQL.
+- Включить ACL Redis с паролем из серверного `.env`.
+- Запускать frontend-nginx непривилегированным пользователем (например, образ `nginx-unprivileged` и порт ≥1024).
