@@ -32,12 +32,15 @@ type IdentityStore interface {
 	DeleteSession(context.Context, string) error
 }
 type Config struct {
-	Business   *Business
-	Demo       bool
-	Origin     string
-	Clock      clock.Clock
-	SessionTTL time.Duration
-	Location   *time.Location
+	Business *Business
+	Demo     bool
+	Origin   string
+	Clock    clock.Clock
+	// SessionClock measures cookie-session lifetime in operational UTC time.
+	// Business Clock may be frozen by DEMO_NOW and must not extend sessions.
+	SessionClock clock.Clock
+	SessionTTL   time.Duration
+	Location     *time.Location
 }
 type Server struct {
 	identities IdentityStore
@@ -45,6 +48,9 @@ type Server struct {
 }
 
 func New(identities IdentityStore, config Config) http.Handler {
+	if config.SessionClock == nil {
+		config.SessionClock = clock.System{}
+	}
 	s := &Server{identities, config}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/demo/session", s.login)
@@ -158,7 +164,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := base64.RawURLEncoding.EncodeToString(randomBytes())
-	if err := s.identities.ReplaceSession(r.Context(), cookieHash(r), hash(token), profile.ID, s.config.Clock.Now().Add(s.config.SessionTTL)); err != nil {
+	if err := s.identities.ReplaceSession(r.Context(), cookieHash(r), hash(token), profile.ID, s.config.SessionClock.Now().Add(s.config.SessionTTL)); err != nil {
 		failure(w, 503, "STORAGE_UNAVAILABLE")
 		return
 	}
@@ -183,7 +189,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (demo.Profile, bool) {
-	p, err := s.identities.SessionProfile(r.Context(), cookieHash(r), s.config.Clock.Now())
+	p, err := s.identities.SessionProfile(r.Context(), cookieHash(r), s.config.SessionClock.Now())
 	if err != nil {
 		if errors.Is(err, authz.ErrUnauthenticated) || errors.Is(err, authz.ErrNotFound) {
 			failure(w, 401, "UNAUTHENTICATED")

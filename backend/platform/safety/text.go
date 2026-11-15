@@ -5,7 +5,10 @@ import (
 	"context"
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 const Hidden = "[чувствительное сообщение скрыто]"
@@ -25,7 +28,11 @@ type Cleaner interface {
 type Local struct{}
 
 var secrets = regexp.MustCompile(`(?i)(?:\b(?:sk-[a-z0-9_-]{8,}|gh[pousr]_[a-z0-9_]{8,})\b|(?:bearer|api[_ -]?key|token|токен|пароль|password|secret)\s*[:=]?\s*[^\s,;]+)`)
-var numbers = regexp.MustCompile(`\b(?:\d[ -]?){12,19}\b`)
+
+// Card-like numbers: 12-19 digits joined by space or hyphen, or four-digit
+// groups joined by dots or slashes. Dotted dates such as 16.11.2026-20.11.2026
+// stay readable because their groups are not four digits wide.
+var numbers = regexp.MustCompile(`\b(?:\d[ -]?){12,19}\b|\b\d{4}(?:\.\d{4}){2}\.\d{1,7}\b|\b\d{4}(?:/\d{4}){2}/\d{1,7}\b`)
 var suspicion = regexp.MustCompile(`(?i)(диагноз|боле[юет]|забол|грипп|ковид|covid|онколог|депресси|беремен|лечени|медицин|больниц|болезн|здоровь|температур|врач|поликлиник|симптом|паспорт|снилс|документ.{0,20}номер|банковск|кредитн|семейн|реб[её]нок|реб[её]нк|сын(?:а|у|ом)?(?:$|[^\p{L}])|доч[ьи]|мам[аыу]|пап[аыу]|родител|супруг|развод|умер|инсулин|диабет)`)
 
 func (Local) Clean(ctx context.Context, raw string) (string, bool, error) {
@@ -35,6 +42,9 @@ func (Local) Clean(ctx context.Context, raw string) (string, bool, error) {
 	if !utf8.ValidString(raw) || utf8.RuneCountInString(raw) > 4000 {
 		return Hidden, true, nil
 	}
+	// Compatibility forms and invisible format characters must not split a
+	// sensitive word or number. Checks and the persisted value use this form.
+	raw = normalize(raw)
 	// Medical and family narrative has no reliable clause boundaries. The entire
 	// message is closed rather than sending the remainder to a model for cleanup.
 	if suspicion.MatchString(raw) {
@@ -46,6 +56,15 @@ func (Local) Clean(ctx context.Context, raw string) (string, bool, error) {
 		return Hidden, true, nil
 	}
 	return strings.TrimSpace(value), false, nil
+}
+
+func normalize(raw string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, norm.NFKC.String(raw))
 }
 
 // Prepare is the only constructor of persistable text. A failed cleaner never

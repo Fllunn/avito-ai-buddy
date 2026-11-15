@@ -3,15 +3,101 @@
   "date": "2026-11-15",
   "commit": "2020c770902dff88b653399816daaa84f81248de",
   "findings": [
-    {"id": "SR-01", "severity": "P2", "file": "backend/internal/api/session.go", "line": 161, "title": "Серверный срок демо-сессии считается по замороженным бизнес-часам DEMO_NOW и не истекает", "status": "confirmed", "evidence": "evidence/secreview_api_test.go::TestSecReviewSessionNeverExpiresWithFrozenClock"},
-    {"id": "SR-02", "severity": "P3", "file": "backend/internal/api/processing.go", "line": 511, "title": "Слот query из ответа модели (reapplyQuery) пропускает шаг явного согласия на повторную подачу после отказа", "status": "confirmed", "evidence": "evidence/secreview_api_test.go::TestSecReviewModelSkipsReapplyConsent"},
-    {"id": "SR-03", "severity": "P3", "file": "backend/platform/safety/text.go", "line": 29, "title": "Очиститель чувствительного ввода обходится невидимыми символами, гомоглифами, разрядкой и разделителем-точкой", "status": "confirmed", "evidence": "evidence/secreview_safety_test.go::TestSecReviewSanitizerBypass"},
-    {"id": "SR-04", "severity": "P3", "file": "frontend/nginx.conf", "line": 1, "title": "Нет CSP, frame-ancestors/X-Frame-Options, nosniff, Referrer-Policy; стенд делит origin semenovm.ru с другими приложениями", "status": "confirmed-by-config", "evidence": "frontend/nginx.conf, infra/avito-buddy.nginx.conf, infra/deploy.compose.yaml:172"},
-    {"id": "SR-05", "severity": "P3", "file": "scripts/package-submission.py", "line": 13, "title": "Сборка ZIP использует denylist по файловой системе, а не список отслеживаемых git-файлов", "status": "confirmed-by-review", "evidence": "scripts/package-submission.py:9-21"},
-    {"id": "SR-06", "severity": "P3", "file": "infra/postgres/01-databases.sh", "line": 10, "title": "Роли приложения владеют своей БД/схемой; Redis без аутентификации; мастер nginx в контейнере от root", "status": "confirmed-by-config", "evidence": "infra/postgres/01-databases.sh:8-11, compose.yaml:84-95, frontend/Dockerfile:10"},
-    {"id": "R1", "severity": "P1", "file": "backend/internal/api/processing.go", "line": 161, "title": "Модель подтверждает действие вопреки тексту пользователя (из output/astra-review)", "status": "not_reproduced", "evidence": "evidence/secreview_api_test.go::TestSecReviewR1ModelCannotConfirm"},
-    {"id": "R2", "severity": "P1", "file": "backend/internal/api/business.go", "line": 402, "title": "GET job после отзыва доступа к документу (из output/astra-review)", "status": "not_reproduced", "evidence": "evidence/secreview_api_test.go::TestSecReviewR2JobAfterTeamChange"},
-    {"id": "R3", "severity": "P1", "file": "backend/internal/api/business.go", "line": 387, "title": "GET attempt раскрывает скрытый ресурс (из output/astra-review)", "status": "not_reproduced", "evidence": "evidence/secreview_api_test.go::TestSecReviewR3HiddenResourceProjections"},
-    {"id": "R4", "severity": "P2", "file": "backend/internal/storage/results.go", "line": 221, "title": "Позднее состояние старой заявки откатывает P6 (из output/astra-review)", "status": "not_reproduced", "evidence": "evidence/secreview_api_test.go::TestSecReviewR4LateOldStates"}
+    {
+      "id": "SR-01",
+      "severity": "P2",
+      "file": "backend/internal/api/session.go",
+      "line": 161,
+      "title": "Серверный срок демо-сессии считается по замороженным бизнес-часам DEMO_NOW и не истекает",
+      "status": "fixed",
+      "evidence": "evidence/secreview_api_test.go::TestSecReviewSessionNeverExpiresWithFrozenClock",
+      "fixed_in": "openspec/changes/harden-security-review (pending human acceptance)"
+    },
+    {
+      "id": "SR-02",
+      "severity": "P3",
+      "file": "backend/internal/api/processing.go",
+      "line": 511,
+      "title": "Слот query из ответа модели (reapplyQuery) пропускает шаг явного согласия на повторную подачу после отказа",
+      "status": "fixed",
+      "evidence": "evidence/secreview_api_test.go::TestSecReviewModelSkipsReapplyConsent",
+      "fixed_in": "openspec/changes/harden-security-review (pending human acceptance)"
+    },
+    {
+      "id": "SR-03",
+      "severity": "P3",
+      "file": "backend/platform/safety/text.go",
+      "line": 29,
+      "title": "Очиститель чувствительного ввода обходится невидимыми символами, гомоглифами, разрядкой и разделителем-точкой",
+      "status": "partially_fixed",
+      "evidence": "evidence/secreview_safety_test.go::TestSecReviewSanitizerBypass",
+      "fixed_in": "openspec/changes/harden-security-review (pending human acceptance)"
+    },
+    {
+      "id": "SR-04",
+      "severity": "P3",
+      "file": "frontend/nginx.conf",
+      "line": 1,
+      "title": "Нет CSP, frame-ancestors/X-Frame-Options, nosniff, Referrer-Policy; стенд делит origin semenovm.ru с другими приложениями",
+      "status": "fixed",
+      "evidence": "frontend/nginx.conf, infra/avito-buddy.nginx.conf, infra/deploy.compose.yaml:172",
+      "fixed_in": "openspec/changes/harden-security-review (pending human acceptance)"
+    },
+    {
+      "id": "SR-05",
+      "severity": "P3",
+      "file": "scripts/package-submission.py",
+      "line": 13,
+      "title": "Сборка ZIP использует denylist по файловой системе, а не список отслеживаемых git-файлов",
+      "status": "fixed",
+      "evidence": "scripts/package-submission.py:9-21",
+      "fixed_in": "openspec/changes/harden-security-review (pending human acceptance)"
+    },
+    {
+      "id": "SR-06",
+      "severity": "P3",
+      "file": "infra/postgres/01-databases.sh",
+      "line": 10,
+      "title": "Роли приложения владеют своей БД/схемой; Redis без аутентификации; мастер nginx в контейнере от root",
+      "status": "documented",
+      "evidence": "infra/postgres/01-databases.sh:8-11, compose.yaml:84-95, frontend/Dockerfile:10",
+      "fixed_in": "openspec/changes/harden-security-review (pending human acceptance)"
+    },
+    {
+      "id": "R1",
+      "severity": "P1",
+      "file": "backend/internal/api/processing.go",
+      "line": 161,
+      "title": "Модель подтверждает действие вопреки тексту пользователя (из output/astra-review)",
+      "status": "not_reproduced",
+      "evidence": "evidence/secreview_api_test.go::TestSecReviewR1ModelCannotConfirm"
+    },
+    {
+      "id": "R2",
+      "severity": "P1",
+      "file": "backend/internal/api/business.go",
+      "line": 402,
+      "title": "GET job после отзыва доступа к документу (из output/astra-review)",
+      "status": "not_reproduced",
+      "evidence": "evidence/secreview_api_test.go::TestSecReviewR2JobAfterTeamChange"
+    },
+    {
+      "id": "R3",
+      "severity": "P1",
+      "file": "backend/internal/api/business.go",
+      "line": 387,
+      "title": "GET attempt раскрывает скрытый ресурс (из output/astra-review)",
+      "status": "not_reproduced",
+      "evidence": "evidence/secreview_api_test.go::TestSecReviewR3HiddenResourceProjections"
+    },
+    {
+      "id": "R4",
+      "severity": "P2",
+      "file": "backend/internal/storage/results.go",
+      "line": 221,
+      "title": "Позднее состояние старой заявки откатывает P6 (из output/astra-review)",
+      "status": "not_reproduced",
+      "evidence": "evidence/secreview_api_test.go::TestSecReviewR4LateOldStates"
+    }
   ]
 }

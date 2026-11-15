@@ -55,7 +55,7 @@ func Factory(ctx context.Context, cfg config.Config) (http.Handler, func(), erro
 	service.Source = store
 	service.Directory = directory
 	business := &api.Business{Store: store, Tools: service, Builder: agent.Builder{Source: store, Directory: directory}, Provider: provider, LLMTimeout: cfg.LLMTimeout, CardTTL: cfg.CardTTL, StepTTL: cfg.StepConfirmationTTL}
-	handler := api.New(store, api.Config{Demo: cfg.DemoMode, Origin: cfg.AllowedOrigin, Clock: cfg.Clock, SessionTTL: cfg.SessionTTL, Location: cfg.Location, Business: business})
+	handler := api.New(store, api.Config{Demo: cfg.DemoMode, Origin: cfg.AllowedOrigin, Clock: cfg.Clock, SessionClock: clock.System{}, SessionTTL: cfg.SessionTTL, Location: cfg.Location, Business: business})
 	// Initialization's context is short lived. Runtime ends with the returned
 	// cleanup, which waits for workers before releasing their connection pool.
 	runtime, cancel := context.WithCancel(context.Background())

@@ -1,6 +1,6 @@
 # Ревью безопасности AI-buddy — 15.11.2026
 
-Проверялась рабочая копия на коммите `2020c77` (дерево чистое, совпадает с HEAD). SHA-256 проверенных файлов (244 шт.) — в [source-manifest.json](source-manifest.json), сводка дефектов — в [findings.json](findings.json), тесты и логи — в [evidence/](evidence/).
+Проверялась рабочая копия на коммите `2020c77` (дерево чистое, совпадает с HEAD). SHA-256 проверенных файлов (244 шт.) — в [source-manifest.json](source-manifest.json), сводка дефектов — в [findings.json](findings.json), тесты-доказательства — в [evidence/](evidence/), порядок их запуска — в разделе 7. Логи прогонов в репозиторий не входят (`*.log` в `.gitignore`); результат воспроизводится командами из раздела 7.
 
 Исходники проекта не менялись. Commit, push и PR не делались. Тесты запускались во временной копии (`git archive HEAD` в scratchpad) в одноразовом Compose-проекте `secreview-30091`; после прогона он удалён вместе со своими томами. Основной стенд `ai-buddy` и его тома не трогались. Настоящая LLM не вызывалась: угрозы со стороны модели проверялись подменным `hostileProvider`, который возвращает заданный, в том числе враждебный, JSON. К semenovm.ru и 177.202.73.214 запросов не было. Файл `.env` не открывался.
 
@@ -15,7 +15,7 @@
 
 **Перепроверка R1–R4:** ни один не воспроизводится на текущем коде (подробно в разделе 3). В репозитории появились регрессионные тесты `TestAstra*`, и они проходят.
 
-**Базовая линия:** полный `go test ./...` для backend и mocks во временной копии проходит. Падают только три моих теста-доказательства для SR-01, SR-02 и SR-03 — см. [evidence/run-full-suite.log](evidence/run-full-suite.log). `npm audit` по `frontend/package-lock.json` нашёл 0 уязвимостей ([evidence/npm-audit.json](evidence/npm-audit.json)).
+**Базовая линия:** полный `go test ./...` для backend и mocks во временной копии проходит. Падают только три моих теста-доказательства для SR-01, SR-02 и SR-03 (воспроизведение — раздел 7). `npm audit` по `frontend/package-lock.json` нашёл 0 уязвимостей ([evidence/npm-audit.json](evidence/npm-audit.json)).
 
 **Что проверено:** все HTTP-эндпоинты API (20 маршрутов) и имитаций (13 маршрутов и панель), сессии, Origin/CSRF и CORS, панель ведущего, межсервисный секрет, подтверждения и гонки, worker и сверка, LLM-конвейер с адаптером OpenRouter, очиститель ввода, SQL, миграции и роли PostgreSQL, Redis, фронтенд (XSS, ссылки, хранилище браузера), Dockerfile, compose, nginx, скрипт упаковки, секреты в рабочей копии и в истории git (10 коммитов), логи.
 
@@ -29,7 +29,7 @@
 - **Триггер:** любой стенд с `DEMO_NOW`: бизнес-часы стоят на одном моменте.
 - **Эксплуатация и последствие:** `expires_at` всегда на `SESSION_TTL` впереди «текущего» бизнес-времени, поэтому сервер никогда не считает сессию просроченной. `Max-Age=8h` ограничивает только браузер. Украденный или сохранённый токен `buddy_session` (например, с общего демо-компьютера) работает бессрочно — до logout, повторного входа из того же браузера или demo-reset. Тест: срок сессии истёк 71 ч 20 мин назад, а `/api/me` отвечает 200.
 - **Нарушенный контракт:** [ADR 0009](../../docs/adr/0009-operational-clock.md) — бизнес-часы применяются к правилам, срокам карточек и подтверждений и пользовательским отметкам; операционные моменты и технические сроки идут по реальному UTC. Срок сессии туда не входит. Также нарушается конфигурационный смысл `SESSION_TTL` и требование «действующей демо-сессии» ([identity-and-permissions](../../openspec/changes/build-onboarding-prototype/specs/identity-and-permissions/spec.md), «Системная идентичность»).
-- **Доказательство:** `TestSecReviewSessionNeverExpiresWithFrozenClock` в [evidence/secreview_api_test.go](evidence/secreview_api_test.go), лог — [evidence/run-secreview.log](evidence/run-secreview.log) (`expired_by=71h20m0s /api/me=200` → FAIL).
+- **Доказательство:** `TestSecReviewSessionNeverExpiresWithFrozenClock` в [evidence/secreview_api_test.go](evidence/secreview_api_test.go). Результат прогона 15.11.2026: `expired_by=71h20m0s /api/me=200` → FAIL.
 - **Как исправить:** выдавать и проверять срок сессии по операционным часам `clock.System` или по `now()` PostgreSQL. Для бизнес-логики оставить DEMO_NOW. Добавить тест с независимо подменяемыми часами.
 
 ### SR-02 · P3 · Ответ модели может пропустить шаг согласия на повторную подачу
@@ -38,7 +38,7 @@
 - **Триггер:** у пользователя есть отклонённый запрос на те же даты или ресурс. Модель — по ошибке или из-за prompt injection через историю или документ — возвращает `time_off_request` с `slots.query="Подтверждаю повторную подачу"`.
 - **Эксплуатация и последствие:** этап `reapply` («прошлый запрос отклонили… ответь „да“») пропускается, и карточка создаётся сразу. В контрольном прогоне без query карточек 0, с query — 1. Сервис не вызывается: карточку всё равно нужно явно подтвердить, поэтому это не P1. Для доступа так же можно обойти первое предупреждение, а при `RejectedID` модель может подставить собственное обоснование.
 - **Нарушенный контракт:** требованием спеки этот шаг не записан. Принцип [assistant-dialogue](../../openspec/changes/build-onboarding-prototype/specs/assistant-dialogue/spec.md) («Намерения и уточнения»: свободный текст даёт только класс намерения и параметры) и код ошибки `REAPPLY_CONFIRMATION_REQUIRED` («требует явного продолжения») подразумевают согласие пользователя, а не модели. Отсюда уровень P3.
-- **Доказательство:** `TestSecReviewModelSkipsReapplyConsent` (control → 0 карточек, model-query → 1 → FAIL), [evidence/run-secreview.log](evidence/run-secreview.log).
+- **Доказательство:** `TestSecReviewModelSkipsReapplyConsent` в [evidence/secreview_api_test.go](evidence/secreview_api_test.go). Результат прогона 15.11.2026: control → 0 карточек, model-query → 1 → FAIL.
 - **Как исправить:** признак повторной подачи хранить отдельным полем, которое выставляет только кнопка или явный текст пользователя (как `explicitConfirmation`). Из ответа модели query либо отбрасывать, либо принимать только как поисковую строку.
 
 ### SR-03 · P3 · Обход очистителя чувствительного ввода
@@ -124,3 +124,45 @@
 - **Публичный стенд, внешний vhost и TLS/HSTS** не проверялись (по условию); серверный `.env` недоступен. Поэтому не подтверждено, задан ли `DEMO_NOW` на деплое (SR-01 применим, если задан или наследуется по умолчанию).
 - **Фронтенд** проверен чтением кода, e2e и Vitest не запускались: локальный fnm не имеет node 24.22.0, `npm audit` выполнен системным node 22.
 - **R1–R4** перепроверены вариантными тестами; утверждать, что не существует другого пути к тем же утечкам, нельзя.
+
+## 7. Как воспроизвести
+
+Логи прогонов не хранятся в репозитории; результат получается заново. Нужны Git Bash и Docker. Тесты запускаются во временной копии и в одноразовом Compose-проекте, рабочая копия и основной стенд не затрагиваются.
+
+```bash
+# 1. Временная копия кода на проверенном коммите (на ветке с исправлениями — указать её вместо 2020c77)
+export COPY_DIR="$(mktemp -d)"
+git archive 2020c77 backend mocks infra | tar -x -C "$COPY_DIR"
+
+# 2. Тесты-доказательства в пакеты копии
+E=output/security-review/evidence
+cp $E/secreview_api_test.go    "$COPY_DIR/backend/internal/api/"
+cp $E/secreview_safety_test.go "$COPY_DIR/backend/platform/safety/"
+cp $E/secreview_mocks_test.go  "$COPY_DIR/mocks/internal/service/"
+
+# 3. Одноразовый проект с уникальным именем: PostgreSQL 16.6 и golang:1.27.0-alpine
+P=secreview-$RANDOM
+docker compose -p $P -f $E/secreview.compose.yaml up -d --wait postgres
+docker compose -p $P -f $E/secreview.compose.yaml run --rm go sh -c \
+  "cd backend && go test -count=1 -v -run TestSecReview ./internal/api/ ./platform/safety/; \
+   cd ../mocks && go test -count=1 -v -run TestSecReview ./internal/service/"
+
+# 4. Полный набор тестов проекта (базовая линия)
+docker compose -p $P -f $E/secreview.compose.yaml run --rm go sh -c \
+  "cd backend && go test -count=1 -p 1 ./...; cd ../mocks && go test -count=1 ./..."
+
+# 5. Удалить только этот проект и его тома
+docker compose -p $P -f $E/secreview.compose.yaml down --volumes
+```
+
+Ожидаемый результат на коммите `2020c77`:
+
+| Тест | Результат |
+|---|---|
+| `TestSecReviewR1ModelCannotConfirm`, `TestSecReviewR2JobAfterTeamChange`, `TestSecReviewR3HiddenResourceProjections`, `TestSecReviewR4LateOldStates` | PASS — R1–R4 не воспроизводятся |
+| `TestSecReviewConcurrencyAndIDOR`, `TestSecReviewMocksIsolation` | PASS — контрольные проверки |
+| `TestSecReviewSessionNeverExpiresWithFrozenClock` | FAIL — SR-01 |
+| `TestSecReviewModelSkipsReapplyConsent` (подтест `model-query`) | FAIL — SR-02 |
+| `TestSecReviewSanitizerBypass` | FAIL, 6 обходов — SR-03 |
+
+На ветке с исправлениями (`harden-security-review`) тесты SR-01 и SR-02 проходят. `TestSecReviewSanitizerBypass` по-прежнему падает только на трёх случаях с гомоглифами и разрядкой: они согласованно оставлены вне этапа 1. `npm audit` воспроизводится командой `npm audit --prefix frontend --package-lock-only`.

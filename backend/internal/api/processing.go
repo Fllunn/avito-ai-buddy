@@ -92,6 +92,9 @@ func (b *Business) process(ctx context.Context, work storage.MessageWork, state 
 	intents := []agent.Intent{}
 	var inferred *agent.Intent
 	defaulted := false
+	// fromModel marks intents produced by the language model. Such intents may
+	// carry parameters, never the user's consent to reapply after a rejection.
+	fromModel := false
 	if state.Current != nil && state.Current.Name == "access_request" && work.Message.Kind == "text" {
 		q := strings.ToLower(strings.TrimSpace(work.Message.Text))
 		if state.Stage == "outside_access" {
@@ -156,6 +159,12 @@ func (b *Business) process(ctx context.Context, work storage.MessageWork, state 
 			return "Уточни, что нужно сделать. Доступны план, поиск инструкции, доступ и отгул.", nil, ""
 		}
 		intents = recognized.Data.Intents
+		fromModel = true
+		for i := range intents {
+			if intents[i].Slots.Query == reapplyQuery {
+				intents[i].Slots.Query = ""
+			}
+		}
 	}
 	for _, intent := range intents {
 		if intent.Name == "card_confirm" && !(work.Message.Kind == "button" && work.Message.Intent == "card_confirm") && !explicitConfirmation(work.Message.Text) {
@@ -355,7 +364,7 @@ func (b *Business) process(ctx context.Context, work storage.MessageWork, state 
 					texts = append(texts, "Не удалось проверить предыдущие заявки. Карточка не создана.")
 					break
 				}
-				if prior != nil && intent.Slots.Query != reapplyQuery && !(state.RejectedID == prior.ID && params.Justification != "") {
+				if prior != nil && intent.Slots.Query != reapplyQuery && !(state.RejectedID == prior.ID && params.Justification != "" && !fromModel) {
 					state.RejectedID = prior.ID
 					state.Current.Slots.ResourceID = params.ResourceID
 					state.Current.Slots.Level = params.Level
