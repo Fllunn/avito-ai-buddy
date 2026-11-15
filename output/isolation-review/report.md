@@ -27,7 +27,7 @@
 
 **Не проверено:** реальная модель OpenRouter, тайминговые каналы, black-box прогон собранных образов против HTTP-имитаций, связка API ↔ mocks под нагрузкой, логи процессов на стенде (подробно в разделе 4).
 
-**Статус после исправления (15.11.2026).** IR-01–IR-04 закрыты change [`harden-data-isolation`](../../openspec/changes/harden-data-isolation/), IR-05 принят в [ADR 0012](../../docs/adr/0012-data-isolation.md). Прогон на рабочей копии с исправлениями:
+**Статус после исправления (15.11.2026).** IR-01–IR-04 закрыты change [`harden-data-isolation`](../../openspec/changes/archive/2026-11-15-harden-data-isolation/), IR-05 принят в [ADR 0012](../../docs/adr/0012-data-isolation.md). Прогон на рабочей копии с исправлениями:
 
 - все тесты-доказательства этого ревью проходят, включая четыре демо-теста, которые раньше падали;
 - регрессионные тесты `TestIsolation*` и `profileIsolation.test.tsx` проходят;
