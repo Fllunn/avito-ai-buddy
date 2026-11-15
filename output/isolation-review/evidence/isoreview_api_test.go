@@ -646,7 +646,8 @@ func TestIsoIdentifierCollisions(t *testing.T) {
 	ca, ia, ja := isoPostText(t, h, alina, shared, "Привет "+alinaMarker)
 	cm, im, jm := isoPostText(t, h, maxim, shared, "Привет "+maximMarker)
 	t.Logf("same client_message_id: alina=%d/%s maxim=%d/%s", ca, ia, cm, im)
-	if ca != 202 || cm != 202 || ia == im || ja == jm {
+	// message_id личный (IR-03 исправлен): у двух пользователей может совпадать; задания разные.
+	if ca != 202 || cm != 202 || ja == jm {
 		t.Fatalf("shared client id across users: %d %d %s %s", ca, cm, ia, im)
 	}
 	if c, id, _ := isoPostText(t, h, maxim, shared, "Привет "+maximMarker); c != 202 || id != im {

@@ -5,6 +5,7 @@
   "question": "Может ли один пользователь увидеть или изменить данные другого",
   "answer": "Через API, чат, план, карточки, маршруты, ответы бота и контекст LLM — нет; P0/P1 не найдено",
   "summary": {"P0": 0, "P1": 0, "P2": 2, "P3": 3},
+  "fixed_by": {"change": "openspec/changes/harden-data-isolation", "date": "2026-11-15", "fixed": ["IR-01", "IR-02", "IR-03", "IR-04"], "accepted": ["IR-05"]},
   "findings": [
     {
       "id": "IR-01",
@@ -17,7 +18,7 @@
       "contract": "identity-and-permissions: Личные данные и назначения; AGENTS.md: Права пользователя",
       "evidence": {"test": "TestIsoServiceObjectOwnerNotBound", "file": "evidence/isoreview_api_test.go", "result": "FAIL", "log": "time_off reuse: err=<nil> row.user_id=alina payload.user_id=maxim alina_plan_has_maxim=true"},
       "fix": "Не обновлять запись при другом владельце (условие в DO UPDATE + ErrContract), проверять владельца найденной строки, включить user_id в ключ проекции и уведомлений",
-      "status": "confirmed-by-test"
+      "status": "fixed"
     },
     {
       "id": "IR-03",
@@ -30,7 +31,7 @@
       "contract": "agent-execution-visibility: Авторизация каждого чтения (по духу); identity-and-permissions: Проверки до раскрытия",
       "evidence": {"test": "TestIsoSideChannelGlobalMessageIDs", "file": "evidence/isoreview_api_test.go", "result": "FAIL", "log": "maxim message_id 1 -> 5; chat ids=[1 5 6]; gap=3 (alina sent 3)"},
       "fix": "Наружу отдавать непрозрачный id (UUID/client_message_id) или личную sequence; внутренний bigint оставить для связей",
-      "status": "confirmed-by-test"
+      "status": "fixed"
     },
     {
       "id": "IR-02",
@@ -43,7 +44,7 @@
       "contract": "AGENTS.md: Права пользователя (проверки на бэкенде)",
       "evidence": {"test": "TestIsoOfferNextJoinsForeignCard", "file": "evidence/isoreview_api_test.go", "result": "FAIL", "log": "offered=true maxim messages 1 -> 2"},
       "fix": "Добавить c.user_id=d.user_id и user_id в подзапросы attempts и чтение статуса переноса",
-      "status": "confirmed-by-test"
+      "status": "fixed"
     },
     {
       "id": "IR-04",
@@ -56,7 +57,7 @@
       "contract": "assistant-dialogue: Переключение пользователя (по духу)",
       "evidence": {"test": "isolation: second tab of the same browser (P3 demo)", "file": "evidence/isoreview_app.test.tsx", "result": "FAIL", "log": "AssertionError: expected true to be false"},
       "fix": "Владелец/версия сессии в ответах chat и onboarding, сброс состояния при несовпадении с me; BroadcastChannel между вкладками",
-      "status": "confirmed-by-test"
+      "status": "fixed"
     },
     {
       "id": "IR-05",
@@ -69,7 +70,7 @@
       "contract": "Формально нет; модель доверия SERVICE_SECRET в docs/architecture.md",
       "evidence": {"test": "TestIsoMocksOperationKeysPerActor", "file": "evidence/isoreview_mocks_test.go", "result": "PASS (фиксирует поведение)"},
       "fix": "Ключ операции в пространстве владельца (actor_id, operation_key) или подписанный токен пользователя",
-      "status": "confirmed-by-test"
+      "status": "accepted-adr-0012"
     }
   ],
   "clean": [

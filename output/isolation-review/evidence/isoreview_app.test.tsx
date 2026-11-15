@@ -89,6 +89,14 @@ describe('isolation: second tab of the same browser (P3 demo)', () => {
   it('does not render another profile data under the current profile header', async () => {
     render(<App />); await screen.findByText('Вход выполняется через выбор профиля сверху.');
     choose('alina'); await screen.findByText(new RegExp(ALINA));
+    // Мок повторяет правило бэкенда после исправления: профиль вкладки ≠ сессии → 409.
+    const tabGuard = (request: Request) => { const tab = request.headers.get('X-Buddy-Profile'); return tab && tab !== user ? HttpResponse.json({ error: { code: 'PROFILE_CHANGED', fields: {}, retryable: false }, request_id: 'r' }, { status: 409 }) : null; };
+    server.use(
+      http.get('*/api/chat', ({ request }) => tabGuard(request) ?? HttpResponse.json(chat(user!))),
+      http.get('*/api/onboarding', ({ request }) => tabGuard(request) ?? HttpResponse.json({ steps: [step(user!)], next_steps: [step(user!)], waiting_on_others: [], requests: [], week: 1, read_only: false, as_of: now })),
+      http.get('*/api/me', ({ request }) => tabGuard(request) ?? HttpResponse.json({ profile: profile(user!), capabilities: { demo: true, service_actions: true } })),
+      http.post('*/api/chat/messages', ({ request }) => tabGuard(request) ?? HttpResponse.json({ job_id: '00000000-0000-4000-8000-000000000001', message_id: 1 })),
+    );
     user = 'maxim'; // вход Максима в другой вкладке перезаписал общий cookie
     fireEvent.change(screen.getByLabelText('Сообщение AI-buddy'), { target: { value: 'Что дальше?' } });
     fireEvent.click(screen.getByLabelText('Отправить'));
