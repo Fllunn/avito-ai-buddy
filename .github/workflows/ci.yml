@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            mocks/go.sum
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: frontend/.node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l backend mocks scripts/coverage)"
+          if [ -n "$unformatted" ]; then
+            echo "Run gofmt -w on:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: |
+          for module in backend mocks scripts/coverage; do
+            (cd "$module" && go vet ./...)
+          done
+
+      - name: npm ci
+        working-directory: frontend
+        run: npm ci
+
+      - name: tsc
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+  coverage:
+    name: Tests and coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            mocks/go.sum
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: frontend/.node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Scripts default GOCACHE to a macOS path; use the runner's cached one.
+      - name: Use default Go cache
+        run: echo "GOCACHE=$(go env GOCACHE)" >> "$GITHUB_ENV"
+
+      - name: npm ci
+        working-directory: frontend
+        run: npm ci
+
+      # Starts isolated PostgreSQL/Redis via docker compose and fails below 80%.
+      - name: make coverage
+        run: make coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage
+          path: |
+            coverage/
+            frontend/coverage/
+          if-no-files-found: ignore
+          retention-days: 14

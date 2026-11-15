@@ -51,7 +51,8 @@ func TestFactory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Parallel test packages queue on the shared migration lock.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	handler, closeApp, err := Factory(ctx, cfg)
 	if err != nil {
