@@ -98,6 +98,11 @@ func TestResourceAndDocumentPermissions(t *testing.T) {
 	if Document(p, demo.Documents()[0]) {
 		t.Fatal("unknown role")
 	}
+	// Disable a profile that otherwise sees the document, so only Enabled decides.
+	p = demo.Profiles()[0]
+	if !Document(p, demo.Documents()[0]) {
+		t.Fatal("precondition: document visible to enabled profile")
+	}
 	p.Enabled = false
 	if Resource(p, demo.Resources()[0]) != ErrNotFound || Document(p, demo.Documents()[0]) {
 		t.Fatal("disabled")
