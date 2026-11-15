@@ -1,0 +1,36 @@
+# Одноразовый проект для тестов-доказательств ревью изоляции данных.
+# Запуск только с уникальным именем проекта: docker compose -p isoreview-<id> -f ... ;
+# основной стенд ai-buddy и его тома не затрагиваются. Пароли синтетические.
+# COPY_DIR — временная копия репозитория (git archive HEAD) вне рабочей копии.
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: synthetic-isoreview-admin
+      API_DB_PASSWORD: synthetic-isoreview-api
+      MOCKS_DB_PASSWORD: synthetic-isoreview-mocks
+    volumes:
+      - ${COPY_DIR}/infra/postgres/01-databases.sh:/docker-entrypoint-initdb.d/01-databases.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d buddy_mocks']
+      interval: 1s
+      timeout: 2s
+      retries: 60
+  go:
+    image: golang:1.27.0-alpine
+    working_dir: /src
+    environment:
+      TEST_API_DATABASE_URL: postgres://buddy_api:synthetic-isoreview-api@postgres:5432/buddy_api?sslmode=disable
+      TEST_MOCKS_DATABASE_URL: postgres://buddy_mocks:synthetic-isoreview-mocks@postgres:5432/buddy_mocks?sslmode=disable
+      CGO_ENABLED: "0"
+      GOFLAGS: -mod=readonly
+    volumes:
+      - ${COPY_DIR}:/src
+      - gomod:/go/pkg/mod
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  gomod:

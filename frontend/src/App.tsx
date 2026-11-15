@@ -13,7 +13,7 @@ import { Logo } from './components/Logo';
 import { CardView } from './features/CardView';
 import { RequestForms } from './features/RequestForms';
 import { useUI } from './stores/ui';
-import { actorName, cardSchema, chatSchema, clientID, dialogueResultSchema, errorText, jobSchema, meSchema, planSchema, profileSchema, queuedSchema, request, resetSession, sessionGeneration, statusLabel, stepConfirmationSchema, stepSchema, type Resource, type ServiceObject, type Parameters } from './api/client';
+import { ApiError, actorName, cardSchema, chatSchema, clientID, dialogueResultSchema, errorText, jobSchema, meSchema, planSchema, profileSchema, queuedSchema, onProfileChanged, request, resetSession, sessionGeneration, setExpectedProfile, statusLabel, stepConfirmationSchema, stepSchema, type Resource, type ServiceObject, type Parameters } from './api/client';
 
 const profiles = [['alina', 'Алина · стажёр · Платежи'], ['maxim', 'Максим · стажёр · Поиск'], ['igor', 'Игорь · наставник'], ['sergey', 'Сергей · наставник'], ['olga', 'Ольга · руководитель'], ['anna', 'Анна · руководитель'], ['daria', 'Дарья · HR BP']];
 export function App() {
@@ -31,7 +31,7 @@ function Workspace() {
   const [statusCheck, setStatusCheck] = useState<'idle' | 'checking' | 'done' | 'failed'>('idle');
   const manualCheck = useRef<{generation:number; jobID?:string; settling?:boolean} | null>(null);
   const [confirmation, setConfirmation] = useState<{ id: string; step: string; summary: string } | null>(null);
-  const me = useQuery({ queryKey: ['me', epoch], queryFn: () => request('/me', meSchema), enabled: !switching });
+  const me = useQuery({ queryKey: ['me', epoch], queryFn: async () => { const data = await request('/me', meSchema); setExpectedProfile(data.profile.id); return data; }, enabled: !switching });
   const profile = !switching ? me.data?.profile : undefined;
   const executions = useExecutions(epoch, !!profile, jobs.length > 0);
   const plan = useQuery({ queryKey: ['plan', epoch], queryFn: () => request('/onboarding', planSchema), enabled: !!profile });
@@ -102,9 +102,19 @@ function Workspace() {
     return () => { active = false; window.clearInterval(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, profile?.id, epoch]);
-  const changeProfile = async (id: string) => {
-    resetSession(); manualCheck.current = null; setStatusCheck('idle'); setEpoch(sessionGeneration()); setSwitching(true); setPlanOpen(false); setJobs([]); setResources([]); setConfirmation(null); setTransfer(null); setFormDefaults({}); setError(''); ui.reset();
+  const clearPersonal = async () => {
+    resetSession(); manualCheck.current = null; setStatusCheck('idle'); setEpoch(sessionGeneration()); setPlanOpen(false); setJobs([]); setResources([]); setConfirmation(null); setTransfer(null); setFormDefaults({}); setError(''); ui.reset();
     await queryClient.cancelQueries(); queryClient.clear();
+  };
+  // Another tab rotated the shared cookie: drop this tab's personal state, reread
+  // the session profile and tell the user. Nothing is resent automatically.
+  useEffect(() => {
+    onProfileChanged(() => { void clearPersonal().then(() => setError(errorText(new ApiError('PROFILE_CHANGED', 409)))); });
+    return () => onProfileChanged(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const changeProfile = async (id: string) => {
+    setSwitching(true); await clearPersonal();
     try { if (id) await request('/demo/session', z.object({ profile: profileSchema }), 'POST', { user_id: id }); else await request('/session', z.undefined(), 'DELETE'); }
     catch (e) { failed(e); } finally { setSwitching(false); }
   };

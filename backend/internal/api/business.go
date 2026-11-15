@@ -171,7 +171,7 @@ func (s *Server) message(w http.ResponseWriter, r *http.Request) {
 		s.businessFailure(w, e)
 		return
 	}
-	respond(w, 202, map[string]any{"message_id": m.ID, "job_id": job, "execution_ids": ids})
+	respond(w, 202, map[string]any{"message_id": m.Sequence, "job_id": job, "execution_ids": ids})
 }
 func (s *Server) button(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.authenticate(w, r)
@@ -202,7 +202,7 @@ func (s *Server) button(w http.ResponseWriter, r *http.Request) {
 		s.businessFailure(w, e)
 		return
 	}
-	respond(w, 202, map[string]any{"job_id": job, "message_ids": []int64{m.ID}, "execution_ids": ids})
+	respond(w, 202, map[string]any{"job_id": job, "message_ids": []int64{m.Sequence}, "execution_ids": ids})
 }
 func (s *Server) prepare(ctx context.Context, p demo.Profile, kind string, raw json.RawMessage) (json.RawMessage, actions.Reservation, error) {
 	b := s.config.Business

@@ -433,7 +433,7 @@ func (s *Store) OfferNext(ctx context.Context, now time.Time) (bool, error) {
 	defer tx.Rollback(context.WithoutCancel(ctx))
 	var user string
 	var raw []byte
-	e = tx.QueryRow(ctx, `SELECT d.user_id,d.payload FROM dialogue_state d JOIN cards c ON c.id::text=d.payload->>'card_id' WHERE jsonb_array_length(COALESCE(d.payload->'pending','[]'))>0 AND COALESCE(d.payload->>'stage','')<>'await_next' AND (c.state IN ('discarded','expired','replaced') OR EXISTS(SELECT 1 FROM attempts a WHERE a.card_id=c.id AND a.state IN ('succeeded','rejected','not_created') AND a.number=(SELECT max(number) FROM attempts WHERE card_id=c.id))) ORDER BY d.user_id FOR UPDATE OF d SKIP LOCKED LIMIT 1`).Scan(&user, &raw)
+	e = tx.QueryRow(ctx, `SELECT d.user_id,d.payload FROM dialogue_state d JOIN cards c ON c.id::text=d.payload->>'card_id' AND c.user_id=d.user_id WHERE jsonb_array_length(COALESCE(d.payload->'pending','[]'))>0 AND COALESCE(d.payload->>'stage','')<>'await_next' AND (c.state IN ('discarded','expired','replaced') OR EXISTS(SELECT 1 FROM attempts a WHERE a.card_id=c.id AND a.user_id=d.user_id AND a.state IN ('succeeded','rejected','not_created') AND a.number=(SELECT max(number) FROM attempts WHERE card_id=c.id AND user_id=d.user_id))) ORDER BY d.user_id FOR UPDATE OF d SKIP LOCKED LIMIT 1`).Scan(&user, &raw)
 	if e == pgx.ErrNoRows {
 		return false, nil
 	}
@@ -462,7 +462,7 @@ func (s *Store) OfferNext(ctx context.Context, now time.Time) (bool, error) {
 			return false, e
 		}
 		var status string
-		e = tx.QueryRow(ctx, `SELECT state FROM attempts WHERE card_id=$1 ORDER BY number DESC LIMIT 1`, transfer.FirstCardID).Scan(&status)
+		e = tx.QueryRow(ctx, `SELECT state FROM attempts WHERE card_id=$1 AND user_id=$2 ORDER BY number DESC LIMIT 1`, transfer.FirstCardID, user).Scan(&status)
 		if e != nil && e != pgx.ErrNoRows {
 			return false, e
 		}
