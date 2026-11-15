@@ -5,7 +5,7 @@
   "question": "Может ли один пользователь увидеть или изменить данные другого",
   "answer": "Через API, чат, план, карточки, маршруты, ответы бота и контекст LLM — нет; P0/P1 не найдено",
   "summary": {"P0": 0, "P1": 0, "P2": 2, "P3": 3},
-  "fixed_by": {"change": "openspec/changes/harden-data-isolation", "date": "2026-11-15", "fixed": ["IR-01", "IR-02", "IR-03", "IR-04"], "accepted": ["IR-05"]},
+  "fixed_by": {"change": "openspec/changes/archive/2026-11-15-harden-data-isolation", "spec": "openspec/specs/data-isolation/spec.md", "date": "2026-11-15", "fixed": ["IR-01", "IR-02", "IR-03", "IR-04"], "accepted": ["IR-05"]},
   "findings": [
     {
       "id": "IR-01",
