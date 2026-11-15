@@ -25,6 +25,9 @@ type actorContextKey struct{}
 
 const cookieName = "buddy_session"
 
+// profileHeader carries the profile id a browser tab currently displays.
+const profileHeader = "X-Buddy-Profile"
+
 type IdentityStore interface {
 	Profile(context.Context, string) (demo.Profile, error)
 	ReplaceSession(context.Context, string, string, string, time.Time) error
@@ -82,7 +85,7 @@ func (s *Server) guard(next http.Handler) http.Handler {
 				return
 			}
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, "+profileHeader)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -196,6 +199,12 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (demo.Prof
 		} else {
 			failure(w, 503, "STORAGE_UNAVAILABLE")
 		}
+		return demo.Profile{}, false
+	}
+	// A tab names the profile it renders. Another tab may have rotated the shared
+	// cookie; such a request is refused before any read or write.
+	if expected := r.Header.Get(profileHeader); expected != "" && expected != p.ID {
+		failure(w, 409, "PROFILE_CHANGED")
 		return demo.Profile{}, false
 	}
 	*r = *r.WithContext(context.WithValue(r.Context(), actorContextKey{}, p.ID))

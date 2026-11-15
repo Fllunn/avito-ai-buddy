@@ -62,6 +62,16 @@ type Message struct {
 	CreatedAt    time.Time         `json:"created_at"`
 }
 
+// MarshalJSON exposes the owner's feed position as "id". The database identity
+// is global and would reveal how many messages other users produced.
+func (m Message) MarshalJSON() ([]byte, error) {
+	type plain Message
+	return json.Marshal(struct {
+		plain
+		ID int64 `json:"id"`
+	}{plain(m), m.Sequence})
+}
+
 type Attempt struct {
 	OperationalCreatedAt time.Time       `json:"-"`
 	ID                   string          `json:"id"`

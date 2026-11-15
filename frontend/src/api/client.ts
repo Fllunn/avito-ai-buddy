@@ -32,7 +32,13 @@ export type Resource = z.infer<typeof resourceSchema>;
 
 let generation = 0;
 const controllers = new Set<AbortController>();
-export function resetSession() { generation++; for (const controller of controllers) controller.abort(); controllers.clear(); }
+// The profile this tab renders. The server refuses requests from a tab whose
+// shared cookie was rotated to another profile in a different tab.
+let expectedProfile: string | null = null;
+let profileChanged: (() => void) | null = null;
+export function setExpectedProfile(id: string | null) { expectedProfile = id; }
+export function onProfileChanged(handler: (() => void) | null) { profileChanged = handler; }
+export function resetSession() { generation++; expectedProfile = null; for (const controller of controllers) controller.abort(); controllers.clear(); }
 export function sessionGeneration() { return generation; }
 export class ApiError extends Error {
   constructor(public code: string, public status: number, public fields: Record<string,string> = {}) { super(code); }
@@ -42,11 +48,18 @@ export async function request<T>(path: string, schema: z.ZodType<T>, method = 'G
   const current = generation;
   const controller = new AbortController(); controllers.add(controller);
   try {
-    const response = await fetch(`${apiBaseURL()}/api${path}`, { method, credentials: 'include', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (expectedProfile) headers['X-Buddy-Profile'] = expectedProfile;
+    const response = await fetch(`${apiBaseURL()}/api${path}`, { method, credentials: 'include', signal: controller.signal, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     if (current !== generation) throw new ApiError('SESSION_CHANGED', 0);
     const raw: unknown = response.status === 204 ? undefined : await response.json();
     if (current !== generation) throw new ApiError('SESSION_CHANGED', 0);
-    if (!response.ok) { const parsed = errorSchema.safeParse(raw); throw new ApiError(parsed.success ? parsed.data.error.code : 'INVALID_RESPONSE', response.status, parsed.success ? parsed.data.error.fields : {}); }
+    if (!response.ok) {
+      const parsed = errorSchema.safeParse(raw);
+      const error = new ApiError(parsed.success ? parsed.data.error.code : 'INVALID_RESPONSE', response.status, parsed.success ? parsed.data.error.fields : {});
+      if (error.code === 'PROFILE_CHANGED' && expectedProfile !== null) { expectedProfile = null; profileChanged?.(); }
+      throw error;
+    }
     const parsed = schema.safeParse(raw);
     if (!parsed.success) throw new ApiError('INVALID_RESPONSE', 0);
     return parsed.data;
@@ -55,7 +68,7 @@ export async function request<T>(path: string, schema: z.ZodType<T>, method = 'G
 export const clientID = () => crypto.randomUUID();
 export function errorText(error: unknown) {
   if (!(error instanceof ApiError)) return 'Не удалось связаться с сервером. Попробуй ещё раз.';
-  const labels: Record<string, string> = { UNAUTHENTICATED: 'Выбери демо-профиль для входа.', NOT_ALLOWED: 'Это действие недоступно. Уточни у наставника или куратора.', NOT_FOUND: 'Объект не найден или недоступен.', VALIDATION_ERROR: 'Проверь параметры формы.', VERSION_CONFLICT: 'Карточка изменилась в другой вкладке. Загрузи актуальную версию.', CARD_EXPIRED: 'Срок карточки истёк. Подготовь новую и подтверди её.', CONFLICTING_ATTEMPT: 'Предыдущий исход ещё уточняется. Сначала проверь попытку.', ALREADY_GRANTED: 'Доступ уже выдан. Если ресурс не открывается, обратись к наставнику.', DUPLICATE_OPEN_REQUEST: 'Уже есть открытая заявка на этот ресурс.', OVERLAPPING_REQUEST: 'На эти дни уже есть активный запрос.', LEVEL_NOT_ALLOWED: 'Выбери разрешённый уровень доступа.', CANCELLATION_TOO_LATE: 'Отмена возможна только до первого дня. Обратись к руководителю.', INVALID_RESPONSE: 'Сервер вернул некорректные данные. Обнови страницу.', REAPPLY_CONFIRMATION_REQUIRED: 'Предыдущий запрос отклонён. Проверь причину и отдельно подтверди повторную подачу.', MESSAGE_ID_CONFLICT: 'Этот запрос уже использован с другими параметрами.', SESSION_CHANGED: 'Профиль сменился. Повтори действие.' };
+  const labels: Record<string, string> = { UNAUTHENTICATED: 'Выбери демо-профиль для входа.', NOT_ALLOWED: 'Это действие недоступно. Уточни у наставника или куратора.', NOT_FOUND: 'Объект не найден или недоступен.', VALIDATION_ERROR: 'Проверь параметры формы.', VERSION_CONFLICT: 'Карточка изменилась в другой вкладке. Загрузи актуальную версию.', CARD_EXPIRED: 'Срок карточки истёк. Подготовь новую и подтверди её.', CONFLICTING_ATTEMPT: 'Предыдущий исход ещё уточняется. Сначала проверь попытку.', ALREADY_GRANTED: 'Доступ уже выдан. Если ресурс не открывается, обратись к наставнику.', DUPLICATE_OPEN_REQUEST: 'Уже есть открытая заявка на этот ресурс.', OVERLAPPING_REQUEST: 'На эти дни уже есть активный запрос.', LEVEL_NOT_ALLOWED: 'Выбери разрешённый уровень доступа.', CANCELLATION_TOO_LATE: 'Отмена возможна только до первого дня. Обратись к руководителю.', INVALID_RESPONSE: 'Сервер вернул некорректные данные. Обнови страницу.', REAPPLY_CONFIRMATION_REQUIRED: 'Предыдущий запрос отклонён. Проверь причину и отдельно подтверди повторную подачу.', MESSAGE_ID_CONFLICT: 'Этот запрос уже использован с другими параметрами.', SESSION_CHANGED: 'Профиль сменился. Повтори действие.', PROFILE_CHANGED: 'Профиль сменён в другой вкладке. Данные обновлены; действие не выполнено.' };
   return (labels[error.code] ?? 'Сервис временно недоступен. Сохранённые данные остаются на экране.') + (['VALIDATION_ERROR','REAPPLY_CONFIRMATION_REQUIRED'].includes(error.code) ? ' ' + Object.values(error.fields).join(' ') : '');
 }
 export const statusLabel = (status: string) => ({ created: 'Заявка создана', submitted: 'Отправлен', in_review: 'На рассмотрении', approved: 'Согласован', rejected: 'Отклонён', cancelled: 'Отменён', done: 'Выполнен', waiting: 'Ожидание', attention: 'Нужно внимание', in_progress: 'В работе', not_started: 'Не начат', queued: 'В очереди', sending: 'Отправляется', unknown: 'Исход уточняется', manual_review: 'Нужна ручная проверка', unavailable: 'Сервис недоступен', not_created: 'Не создан', succeeded: 'Результат сохранён' }[status] ?? status);

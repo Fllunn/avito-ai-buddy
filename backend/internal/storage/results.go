@@ -170,11 +170,17 @@ func saveObject(ctx context.Context, tx pgx.Tx, job actions.Work, object actions
 	}
 	var existingVersion int64
 	var payload []byte
-	err := tx.QueryRow(ctx, `SELECT service_version,payload FROM service_objects WHERE service=$1 AND object_id=$2 FOR UPDATE`, object.Service, object.ID).Scan(&existingVersion, &payload)
+	var owner string
+	err := tx.QueryRow(ctx, `SELECT service_version,payload,user_id FROM service_objects WHERE service=$1 AND object_id=$2 FOR UPDATE`, object.Service, object.ID).Scan(&existingVersion, &payload, &owner)
 	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
 	if err == nil {
+		// A service object number belongs to exactly one user. A response that
+		// reassigns it is a contract violation and must not touch either projection.
+		if owner != object.UserID {
+			return actions.ErrContract
+		}
 		if existingVersion > object.Version {
 			return nil
 		}
@@ -194,8 +200,12 @@ func saveObject(ctx context.Context, tx pgx.Tx, job actions.Work, object actions
 	if err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO service_objects(service,object_id,user_id,service_version,payload,checked_at,observed_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(service,object_id) DO UPDATE SET service_version=EXCLUDED.service_version,payload=EXCLUDED.payload,checked_at=EXCLUDED.checked_at,observed_at=EXCLUDED.observed_at`, object.Service, object.ID, object.UserID, object.Version, payload, now, operationalNow); err != nil {
+	tag, err := tx.Exec(ctx, `INSERT INTO service_objects(service,object_id,user_id,service_version,payload,checked_at,observed_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(service,object_id) DO UPDATE SET service_version=EXCLUDED.service_version,payload=EXCLUDED.payload,checked_at=EXCLUDED.checked_at,observed_at=EXCLUDED.observed_at WHERE service_objects.user_id=EXCLUDED.user_id`, object.Service, object.ID, object.UserID, object.Version, payload, now, operationalNow)
+	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return actions.ErrContract
 	}
 	if object.Service == "access" {
 		if err = projectAccessPlan(ctx, tx, object); err != nil {
