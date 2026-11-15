@@ -1,5 +1,9 @@
 # AI-buddy — ИИ-наставник для стажёров
 
+
+https://github.com/user-attachments/assets/fce45dad-ad75-4001-a663-12cb9f4ae1ca
+
+
 [![CI](https://github.com/Fllunn/avito-ai-buddy/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Fllunn/avito-ai-buddy/actions/workflows/ci.yml)
 
 Прототип для Hack&Change 2026: помогает стажёру найти следующий шаг, разобраться в демонстрационных материалах и выполнить организационное действие через имитации корпоративных сервисов. Снимает рутину с наставника, сохраняя за ним содержательное сопровождение.
