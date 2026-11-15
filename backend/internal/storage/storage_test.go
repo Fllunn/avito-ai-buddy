@@ -21,7 +21,8 @@ func testStore(t *testing.T) *Store {
 	if databaseURL == "" {
 		t.Skip("run make integration-test or make coverage for PostgreSQL checks")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Parallel test packages queue on the shared migration lock.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	admin, err := Open(ctx, databaseURL)
 	if err != nil {

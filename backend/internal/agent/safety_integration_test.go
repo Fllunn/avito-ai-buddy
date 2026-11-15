@@ -21,7 +21,8 @@ func TestSensitiveCorpusAcrossStorageJobsAndProvider(t *testing.T) {
 	if databaseURL == "" {
 		t.Skip("run make coverage for PostgreSQL checks")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Parallel test packages queue on the shared migration lock.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	admin, err := storage.Open(ctx, databaseURL)
 	if err != nil {

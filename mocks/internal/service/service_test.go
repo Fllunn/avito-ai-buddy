@@ -31,7 +31,8 @@ func fixture(t *testing.T) *Server {
 	if url == "" {
 		t.Skip("make coverage starts isolated PostgreSQL")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Parallel test packages queue on the shared migration lock.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	store, err := Open(ctx, url)
 	if err != nil {
